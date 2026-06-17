@@ -5,13 +5,81 @@ import requests
 
 TRELLO_KEY = os.environ["TRELLO_KEY"]
 TRELLO_TOKEN = os.environ["TRELLO_TOKEN"]
-BOARD_ID = "68346ca8e57293070560e8f2"
 
-TODO_LISTS = {"68346ca8e57293070560e8e8", "68346ca8e57293070560e8ea", "68346ca8e57293070560e8e9"}
-WIP_LISTS = {"6a0ca010ad9cbd3c31e63713", "695cfb590da0e9598b0ba279", "695cf71ee2b0a711a3be4eff",
-             "68346ca8e57293070560e8eb", "68346ca8e57293070560e8ec", "695cfbde5b57ba6ec4318fba",
-             "68346ca8e57293070560e8ed", "695cfc3bc04de6a75aecc420", "698c84bbd1a8ffa95e86d0b7"}
-DONE_LISTS = {"68346ca8e57293070560e8ee", "68346ca8e57293070560e8f0"}
+BOARDS = [
+    {"key": "3di-biogas", "name": "3DI Biogás", "board_id": "68346ca8e57293070560e8f2", "lists": {
+        "Backlog": "68346ca8e57293070560e8e8", "Criação de Briefing": "68346ca8e57293070560e8e9",
+        "Aguardando Material": "68346ca8e57293070560e8ea", "Liberado Produção": "6a0ca010ad9cbd3c31e63713",
+        "Andamento Texto": "695cfb590da0e9598b0ba279", "Andamento Ritta": "695cf71ee2b0a711a3be4eff",
+        "Andamento Castro": "68346ca8e57293070560e8eb", "Revisão Interna": "68346ca8e57293070560e8ec",
+        "Ajuste Interno": "695cfbde5b57ba6ec4318fba", "Aprovação Cliente": "68346ca8e57293070560e8ed",
+        "Ajuste Cliente": "695cfc3bc04de6a75aecc420", "Aprovado/Publicação": "68346ca8e57293070560e8ee",
+        "Agendado": "698c84bbd1a8ffa95e86d0b7", "Finalizado": "68346ca8e57293070560e8f0",
+        "Cancelado": "68346ca8e57293070560e8ef"}},
+    {"key": "planet-biogas-brasil", "name": "PlanET Biogás Brasil", "board_id": "682f73f89fa4becf55379eab", "lists": {
+        "Backlog": "682f73f89fa4becf55379ea1", "Criação de Briefing": "682f73f89fa4becf55379ea2",
+        "Aguardando Material": "682f73f89fa4becf55379ea3", "Liberado Produção": "6a19f7fd7c243271fcfef69a",
+        "Andamento Texto": "682f73f89fa4becf55379ea4", "Andamento Ritta": "695cfedb6a27b43127581928",
+        "Andamento Castro": "695cfee52d63f9c832723903", "Revisão Interna": "682f73f89fa4becf55379ea5",
+        "Ajuste Interno": "695cfef4b9d63c7f3fa8945c", "Aprovação Cliente": "682f73f89fa4becf55379ea6",
+        "Ajuste Cliente": "695cff0158d9408bc6ed81cb", "Aprovado/Publicação": "682f73f89fa4becf55379ea7",
+        "Agendado": "698c847f08c847b01c5ca97b", "Finalizado": "682f73f89fa4becf55379ea9",
+        "Cancelado": "682f73f89fa4becf55379eaa"}},
+    {"key": "oxido-ferro-rio-acima", "name": "Óxido de Ferro Rio Acima", "board_id": "69c5142b1fb9acdd7fdccc72", "lists": {
+        "Backlog": "69c5142b1fb9acdd7fdccc64", "Criação de Briefing": "69c5142b1fb9acdd7fdccc65",
+        "Aguardando Material": "69c5142b1fb9acdd7fdccc66", "Liberado Produção": "6a06358a5d3194d3b8f5de4a",
+        "Andamento Texto": "69c5142b1fb9acdd7fdccc67", "Andamento Ritta": "69c5142b1fb9acdd7fdccc6e",
+        "Andamento Castro": "69c5142b1fb9acdd7fdccc6f", "Revisão Interna": "69c5142b1fb9acdd7fdccc68",
+        "Ajuste Interno": "69c5142b1fb9acdd7fdccc6d", "Aprovação Cliente": "69c5142b1fb9acdd7fdccc69",
+        "Ajuste Cliente": "69c5142b1fb9acdd7fdccc70", "Aprovado/Publicação": "69c5142b1fb9acdd7fdccc6a",
+        "Agendado": "69c5142b1fb9acdd7fdccc71", "Finalizado": "69c5142b1fb9acdd7fdccc6b",
+        "Cancelado": "69c5142b1fb9acdd7fdccc6c"}},
+    {"key": "grupo-regera", "name": "Grupo Regera", "board_id": "6878c7522ab33234a7b4c2be", "lists": {
+        "Backlog": "6878c7522ab33234a7b4c2b3", "Criação de Briefing": "6878c7522ab33234a7b4c2b4",
+        "Aguardando Material": "6878c7522ab33234a7b4c2b5", "Liberado Produção": "6878c7522ab33234a7b4c2b6",
+        "Andamento Texto": "695cfcb9cd400388d4e0c654", "Andamento Ritta": "695cf753c6cab81a64857a5f",
+        "Andamento Castro": "68b6e729ccee0f2d283931b3", "Revisão Interna": "6878c7522ab33234a7b4c2b7",
+        "Ajuste Interno": "695cfe35bb34691e2403dac6", "Aprovação Cliente": "6878c7522ab33234a7b4c2b8",
+        "Ajuste Cliente": "695cfe8240b332f29004025b", "Aprovado/Publicação": "6878c7522ab33234a7b4c2b9",
+        "Agendado": "698c8615e1bfed6f11f0c799", "Finalizado": "6878c7522ab33234a7b4c2bb",
+        "Cancelado": "6878c7522ab33234a7b4c2bc"}},
+    {"key": "plataforma-melhore", "name": "Plataforma Melhore", "board_id": "683f001d41c5cbc07b001cbc", "lists": {
+        "Backlog": "683f00249c00c33a4d32e04d", "Criação de Briefing": "683f002b7a7261293b251eb4",
+        "Aguardando Material": "6876a44982d69d3e580eef52", "Liberado Produção": "69f3b606dbd496a99115318a",
+        "Andamento Texto": "683f00351c4fb7ec4a925c94", "Andamento Ritta": "695cfaf43b7ef7fda7da6c41",
+        "Andamento Castro": "695cfac015817367865f41cc", "Revisão Interna": "683f003d2663d1eeece0c43d",
+        "Ajuste Interno": "695d01e8c9bfaf9fd3586c26", "Aprovação Cliente": "683f005060c7401f24604a0c",
+        "Ajuste Cliente": "683f0048925c2cebd88aa752", "Aprovado/Publicação": "683f00585c034b296523da5e",
+        "Agendado": "698c867ec0c9f514df91c13c", "Finalizado": "683f005d6c8f33c8b96b7042",
+        "Cancelado": "683f007999147c9184607c3a"}},
+    {"key": "lean-4-0", "name": "Lean 4.0", "board_id": "6835d858dbf081a37dfa40b2", "lists": {
+        "Backlog": "6835d858dbf081a37dfa40a8", "Criação de Briefing": "6835d858dbf081a37dfa40a9",
+        "Aguardando Material": "6835d858dbf081a37dfa40aa", "Liberado Produção": "69f8dd4700147b9cde3713f4",
+        "Andamento Texto": "695d0014fd9833be71193843", "Andamento Ritta": "6835d858dbf081a37dfa40ab",
+        "Andamento Castro": "695cfffe60d09dcb05cb7f27", "Revisão Interna": "6835d858dbf081a37dfa40ac",
+        "Ajuste Interno": "695d002dc042a4edae209268", "Aprovação Cliente": "6835d858dbf081a37dfa40ad",
+        "Ajuste Cliente": "695d003cddafe9e309715aa7", "Aprovado/Publicação": "6835d858dbf081a37dfa40ae",
+        "Agendado": "698c8634666a05c1ab6c4d83", "Finalizado": "6835d858dbf081a37dfa40b0",
+        "Cancelado": "6835d858dbf081a37dfa40b1"}},
+    {"key": "clean-energy-br", "name": "Clean Energy BR", "board_id": "6839f074d63af77e8ad12f57", "lists": {
+        "Backlog": "6839f074d63af77e8ad12fa2", "Criação de Briefing": "6839f074d63af77e8ad12fa3",
+        "Aguardando Material": "6839f074d63af77e8ad12fa4", "Liberado Produção": "6a0b5627fa8e967826830490",
+        "Andamento Texto": "68780b90bb9fd58e1f400d59", "Andamento Ritta": "6839f0b1c9572237081dc65f",
+        "Andamento Castro": "695cff7ddbb753e2b4b41ee8", "Revisão Interna": "6839f0b3dc6ebe842b73f372",
+        "Ajuste Interno": "695cff9d2f25ea7413ee5320", "Aprovação Cliente": "6839f0c446a723f27e44b14e",
+        "Ajuste Cliente": "695cffb3ed8f9099f69a2d09", "Aprovado/Publicação": "6839f0d0aeb2f77b4a903b38",
+        "Agendado": "698c84ab095360c1b0c30e1e", "Finalizado": "6839f0e360006db401074d77",
+        "Cancelado": "6839f0e8533dc3eb256537ce"}},
+]
+
+STAGE_GROUPS = {
+    "Backlog": "todo", "Criação de Briefing": "todo", "Aguardando Material": "todo",
+    "Liberado Produção": "wip", "Andamento Texto": "wip", "Andamento Ritta": "wip",
+    "Andamento Castro": "wip", "Revisão Interna": "wip", "Ajuste Interno": "wip",
+    "Aprovação Cliente": "wip", "Ajuste Cliente": "wip", "Agendado": "wip",
+    "Aprovado/Publicação": "done", "Finalizado": "done", "Cancelado": "cancelled",
+}
+
 EXCLUDE_CARD_IDS = {"6a32adc6a82a7a69ed99e338"}
 
 BASE = "https://api.trello.com/1"
@@ -76,18 +144,26 @@ def iqr_upper_fence(sorted_vals):
     return q3 + 1.5 * (q3 - q1)
 
 
-def fmt_pt(n):
+def fmt_days(n):
+    if float(n).is_integer():
+        return str(int(n))
     return f"{n:.1f}".replace(".", ",")
 
 
-def build_dataset():
+def build_dataset(board):
     today = date.today()
     period_start = date(today.year, 1, 1)
     since_iso = f"{period_start.isoformat()}T00:00:00.000Z"
     before_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    board_id = board["board_id"]
+    name_to_id = board["lists"]
 
-    cards = trello_get(f"/boards/{BOARD_ID}/cards", filter="open", fields="id,name,idList,closed")
-    actions = trello_get(f"/boards/{BOARD_ID}/actions", filter="updateCard:idList",
+    TODO_LISTS = {name_to_id[n] for n, g in STAGE_GROUPS.items() if g == "todo"}
+    WIP_LISTS = {name_to_id[n] for n, g in STAGE_GROUPS.items() if g == "wip"}
+    DONE_LISTS = {name_to_id[n] for n, g in STAGE_GROUPS.items() if g == "done"}
+
+    cards = trello_get(f"/boards/{board_id}/cards", filter="open", fields="id,name,idList,closed")
+    actions = trello_get(f"/boards/{board_id}/actions", filter="updateCard:idList",
                           since=since_iso, before=before_iso, limit=1000, fields="data,date")
 
     by_card = {}
@@ -96,9 +172,11 @@ def build_dataset():
         if cid in EXCLUDE_CARD_IDS:
             continue
         dt = to_brt(a["date"])
+        list_after = a["data"].get("listAfter")
+        if not list_after:
+            continue
         if cid not in by_card or dt > by_card[cid]["dt"]:
-            by_card[cid] = {"dt": dt, "name": a["data"]["card"]["name"],
-                             "listAfter_id": a["data"]["listAfter"]["id"]}
+            by_card[cid] = {"dt": dt, "name": a["data"]["card"]["name"], "listAfter_id": list_after["id"]}
 
     completed = []
     for cid, info in by_card.items():
@@ -152,49 +230,45 @@ def build_dataset():
             f"{len(outliers)} {'cartões' if plural else 'cartão'} "
             f"{'destacados' if plural else 'destacado'} em vermelho "
             f"{'estão' if plural else 'está'} fora da curva; "
-            f"sem {'eles' if plural else 'ele'}, a média do período cai de {fmt_pt(avg_bd)} "
-            f"para cerca de {fmt_pt(avg_wo_outliers)} dias úteis."
+            f"sem {'eles' if plural else 'ele'}, a média do período cai de {fmt_days(avg_bd)} "
+            f"para cerca de {fmt_days(avg_wo_outliers)} dias úteis."
         )
     else:
         note = "Cartões ordenados do menor para o maior lead time. A linha vertical marca a mediana."
 
     return {
-        "generated_at": datetime.utcnow().isoformat(),
+        "name": board["name"],
         "period_start": period_start.isoformat(),
         "period_end": today.isoformat(),
         "completed": completed,
         "afazer": afazer,
         "stats": {
-            "count": n, "median_bd": median_bd, "median_cd": median_cd,
-            "avg_bd": avg_bd, "bd_min": bd_min, "bd_max": bd_max,
+            "count": n,
+            "median_bd": median_bd, "median_bd_display": fmt_days(median_bd),
+            "median_cd": median_cd,
+            "avg_bd": avg_bd, "avg_bd_display": fmt_days(avg_bd),
+            "bd_min": bd_min, "bd_max": bd_max,
             "fence_bd": fence_bd if fence_bd != float("inf") else 999999,
             "fence_cd": fence_cd if fence_cd != float("inf") else 999999,
             "todo_count": len(afazer), "wip_count": wip_count, "done_total": done_total,
+            "wip_stage_count": len(WIP_LISTS),
         },
         "note": note,
     }
 
 
-def render_html(d):
-    s = d["stats"]
+def render_html(all_data, board_order, generated_at_str):
     tpl = open("template.html", encoding="utf-8").read()
+    all_data_json = json.dumps(all_data, ensure_ascii=False).replace("</script", "<\\/script")
+    board_order_json = json.dumps(board_order, ensure_ascii=False)
+    options_html = "".join(
+        f'<option value="{k}">{all_data[k]["name"]}</option>' for k in board_order
+    )
     repl = {
-        "__PERIOD_START__": datetime.fromisoformat(d["period_start"]).strftime("%d %b %Y").lower(),
-        "__PERIOD_END__": datetime.fromisoformat(d["period_end"]).strftime("%d %b %Y").lower(),
-        "__GENERATED_AT__": (datetime.utcnow() + BRT_OFFSET).strftime("%d/%m/%Y %H:%M"),
-        "__TODO_COUNT__": str(s["todo_count"]),
-        "__WIP_COUNT__": str(s["wip_count"]),
-        "__DONE_PERIOD_COUNT__": str(s["count"]),
-        "__DONE_TOTAL_COUNT__": str(s["done_total"]),
-        "__STAT_COUNT__": str(s["count"]),
-        "__STAT_MEDIAN__": str(s["median_bd"]),
-        "__STAT_AVG__": fmt_pt(s["avg_bd"]),
-        "__STAT_MINMAX__": f"{s['bd_min']}–{s['bd_max']}",
-        "__SECTION_NOTE__": d["note"],
-        "__COMPLETED_JSON__": json.dumps(d["completed"], ensure_ascii=False),
-        "__AFAZER_JSON__": json.dumps(d["afazer"], ensure_ascii=False),
-        "__MEDIAN_VALUES_JSON__": json.dumps({"business_days": s["median_bd"], "calendar_days": s["median_cd"]}),
-        "__OUTLIER_THRESHOLDS_JSON__": json.dumps({"business_days": s["fence_bd"], "calendar_days": s["fence_cd"]}),
+        "__GENERATED_AT__": generated_at_str,
+        "__ALL_BOARDS_JSON__": all_data_json,
+        "__BOARD_ORDER_JSON__": board_order_json,
+        "__BOARD_OPTIONS_HTML__": options_html,
     }
     for k, v in repl.items():
         tpl = tpl.replace(k, v)
@@ -202,8 +276,16 @@ def render_html(d):
 
 
 if __name__ == "__main__":
-    dataset = build_dataset()
-    html = render_html(dataset)
+    all_data = {}
+    board_order = [b["key"] for b in BOARDS]
+    for board in BOARDS:
+        all_data[board["key"]] = build_dataset(board)
+
+    generated_at_str = (datetime.utcnow() + BRT_OFFSET).strftime("%d/%m/%Y %H:%M")
+    html = render_html(all_data, board_order, generated_at_str)
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"OK: {dataset['stats']['count']} cartoes concluidos, mediana {dataset['stats']['median_bd']} dias uteis")
+
+    for k in board_order:
+        s = all_data[k]["stats"]
+        print(f"OK [{all_data[k]['name']}]: {s['count']} cartoes concluidos, mediana {s['median_bd_display']} dias uteis")

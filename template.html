@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lead Time — 3DI Biogás</title>
+<title>Lead Time — Biosfera</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -31,7 +31,12 @@
   .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .eyebrow .freshness{color:var(--muted);text-transform:none;letter-spacing:0;font-size:11px;}
   h1{font-family:var(--font-display);font-weight:700;font-size:44px;line-height:1.05;margin:0 0 8px;letter-spacing:-0.01em;}
-  .subtitle{font-size:16px;color:var(--muted);margin:0 0 4px;}
+  .subtitle-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 4px;}
+  .subtitle{font-size:16px;color:var(--muted);margin:0;}
+  .board-select-wrap{display:inline-flex;align-items:center;gap:8px;}
+  .board-select-wrap label{font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);}
+  select#boardSelector{font-family:var(--font-mono);font-size:13px;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:7px 10px;cursor:pointer;}
+  select#boardSelector:focus{outline:2px solid var(--primary-light);}
   .methodology{font-size:13px;color:var(--muted);max-width:640px;margin:14px 0 0;}
   .flow{display:flex;align-items:center;gap:0;margin:40px 0 36px;padding:28px 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
   .flow-stage{flex:1 1 0;text-align:center;padding:0 8px;}
@@ -87,6 +92,7 @@
     h1{font-size:32px;}
     .flow{flex-wrap:wrap;}
     .flow-pipe{display:none;}
+    .subtitle-row{flex-direction:column;align-items:flex-start;gap:8px;}
   }
 </style>
 </head>
@@ -95,34 +101,40 @@
 
   <p class="eyebrow">Modelo de análise · Kanban / Trello <span class="freshness">· atualizado em __GENERATED_AT__ (Brasília)</span></p>
   <h1>Lead Time</h1>
-  <p class="subtitle">Board 3DI Biogás &middot; __PERIOD_START__ – __PERIOD_END__</p>
+  <div class="subtitle-row">
+    <p class="subtitle" id="subtitleText">Board · período</p>
+    <div class="board-select-wrap">
+      <label for="boardSelector">Board</label>
+      <select id="boardSelector">__BOARD_OPTIONS_HTML__</select>
+    </div>
+  </div>
   <p class="methodology">Lead time contado em <strong>dias úteis</strong> (segunda a sexta, sem exclusão de feriados), da criação do cartão até a entrada definitiva no grupo <strong>Finalizado</strong>. Detalhes do critério no final da página.</p>
 
   <div class="flow">
     <div class="flow-stage" data-stage="todo">
-      <span class="flow-count">__TODO_COUNT__</span>
+      <span class="flow-count" id="flowTodoCount">0</span>
       <span class="flow-label">A Fazer</span>
       <span class="flow-sub">aguardando início</span>
     </div>
     <div class="flow-pipe"></div>
     <div class="flow-stage" data-stage="wip">
-      <span class="flow-count">__WIP_COUNT__</span>
+      <span class="flow-count" id="flowWipCount">0</span>
       <span class="flow-label">Em andamento (WIP)</span>
-      <span class="flow-sub">9 colunas</span>
+      <span class="flow-sub" id="flowWipSub">9 colunas</span>
     </div>
     <div class="flow-pipe"></div>
     <div class="flow-stage" data-stage="done">
-      <span class="flow-count">__DONE_PERIOD_COUNT__</span>
+      <span class="flow-count" id="flowDoneCount">0</span>
       <span class="flow-label">Finalizado</span>
-      <span class="flow-sub">no período · __DONE_TOTAL_COUNT__ no total</span>
+      <span class="flow-sub" id="flowDoneSub">no período</span>
     </div>
   </div>
 
   <div class="stats">
-    <div class="stat"><span class="stat-value">__STAT_COUNT__</span><span class="stat-label">cartões concluídos no período</span></div>
-    <div class="stat"><span class="stat-value">__STAT_MEDIAN__</span><span class="stat-label">mediana, dias úteis</span></div>
-    <div class="stat"><span class="stat-value">__STAT_AVG__</span><span class="stat-label">média, dias úteis</span></div>
-    <div class="stat"><span class="stat-value">__STAT_MINMAX__</span><span class="stat-label">mínimo–máximo, dias úteis</span></div>
+    <div class="stat"><span class="stat-value" id="statCount">0</span><span class="stat-label">cartões concluídos no período</span></div>
+    <div class="stat"><span class="stat-value" id="statMedian">0</span><span class="stat-label">mediana, dias úteis</span></div>
+    <div class="stat"><span class="stat-value" id="statAvg">0</span><span class="stat-label">média, dias úteis</span></div>
+    <div class="stat"><span class="stat-value" id="statMinmax">0–0</span><span class="stat-label">mínimo–máximo, dias úteis</span></div>
   </div>
 
   <section>
@@ -133,7 +145,7 @@
         <button data-metric="calendar_days">dias corridos</button>
       </div>
     </div>
-    <p class="section-note">__SECTION_NOTE__</p>
+    <p class="section-note" id="sectionNote">Cartões ordenados do menor para o maior lead time.</p>
     <div class="chart" id="chart"></div>
     <div class="chart-legend">
       <span><span class="dot" style="background:var(--primary)"></span>dentro da distribuição</span>
@@ -161,7 +173,7 @@
 
   <section>
     <div class="section-head"><h2>Aguardando em A Fazer</h2></div>
-    <p class="section-note">Cartões parados antes do início do trabalho (Backlog, Aguardando Material, Criação de Briefing), com o tempo de espera contado até hoje. Ainda não têm lead time, porque não foram concluídos.</p>
+    <p class="section-note">Cartões parados antes do início do trabalho (Backlog, Criação de Briefing, Aguardando Material), com o tempo de espera contado até hoje. Ainda não têm lead time, porque não foram concluídos.</p>
     <table id="afazerTable">
       <thead>
         <tr>
@@ -176,46 +188,55 @@
   </section>
 
   <footer>
-    <p><strong>Atualização.</strong> Este dashboard é regenerado automaticamente toda segunda-feira de manhã, direto a partir do board no Trello, por um robô configurado no GitHub. Também pode ser disparado manualmente entre uma atualização e outra.</p>
+    <p><strong>Atualização.</strong> Este dashboard é regenerado automaticamente toda segunda-feira de manhã, direto a partir dos boards no Trello, por um robô configurado no GitHub. Também pode ser disparado manualmente entre uma atualização e outra.</p>
     <p><strong>Critério de conclusão.</strong> Um cartão entra na análise de lead time se a última movimentação de lista registrada nele dentro do período o levou para Aprovado/Publicação ou Finalizado, e ele permanece numa dessas duas listas até hoje. Cartões que passaram por Finalizado e voltaram (reabertos) não contam como concluídos.</p>
     <p><strong>Período.</strong> O período considerado vai de 1º de janeiro do ano atual até hoje, e se renova automaticamente a cada janeiro.</p>
     <p><strong>Data de criação.</strong> Estimada a partir do identificador do cartão no Trello, que carrega o instante de criação em sua própria estrutura, e não a partir de uma ação de "criação" separada.</p>
     <p><strong>Fuso horário.</strong> Todas as datas foram convertidas para o horário de Brasília (UTC-3) antes do cálculo de dias úteis.</p>
     <p><strong>Fora da curva.</strong> Os cartões destacados em vermelho no gráfico são identificados estatisticamente (regra do intervalo interquartil), e não por uma lista fixa, então o destaque se ajusta sozinho conforme os dados mudam.</p>
-    <p><strong>Exclusão.</strong> O cartão "Teste de Tarefa Claude Conector" é removido automaticamente desta análise.</p>
-    <p>Modelo inicial construído para o board 3DI Biogás. A mesma lógica pode ser aplicada a outros boards.</p>
+    <p><strong>Estrutura padronizada.</strong> Todos os boards monitorados seguem as mesmas 15 colunas e os mesmos critérios de agrupamento, o que permite comparação direta entre eles ao trocar o seletor acima.</p>
+    <p><strong>Exclusão.</strong> Cartões de teste usados durante a configuração desta automação são removidos automaticamente da análise.</p>
   </footer>
 
 </div>
 
 <script>
-const completed = __COMPLETED_JSON__;
-const afazer = __AFAZER_JSON__;
-const MEDIAN_VALUES = __MEDIAN_VALUES_JSON__;
-const OUTLIER_THRESHOLDS = __OUTLIER_THRESHOLDS_JSON__;
+const ALL_BOARDS = __ALL_BOARDS_JSON__;
+const BOARD_ORDER = __BOARD_ORDER_JSON__;
+
+const MONTHS_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 
 function fmtDate(iso){
   const [y,m,d] = iso.split('-');
   return `${d}/${m}/${y.slice(2)}`;
 }
+function fmtPeriodDate(iso){
+  const [y,m,d] = iso.split('-').map(Number);
+  return `${String(d).padStart(2,'0')} ${MONTHS_PT[m-1]} ${y}`;
+}
 
+let currentBoardKey = BOARD_ORDER[0];
 let currentMetric = 'business_days';
-function renderChart(metric){
-  currentMetric = metric;
+
+function renderChart(){
+  const board = ALL_BOARDS[currentBoardKey];
+  const completed = board.completed;
   const chart = document.getElementById('chart');
   chart.innerHTML = '';
   if(completed.length === 0){
     chart.innerHTML = '<p class="empty">Nenhum cartão concluído no período ainda.</p>';
     return;
   }
+  const metric = currentMetric;
   const sorted = [...completed].sort((a,b)=>a[metric]-b[metric]);
   const max = Math.max(...sorted.map(c=>c[metric]));
-  const medianVal = MEDIAN_VALUES[metric];
+  const medianVal = metric === 'business_days' ? board.stats.median_bd : board.stats.median_cd;
+  const fence = metric === 'business_days' ? board.stats.fence_bd : board.stats.fence_cd;
   sorted.forEach(c=>{
     const row = document.createElement('div');
     row.className = 'bar-row';
     const pct = max ? (c[metric]/max*100) : 0;
-    const isOutlier = c[metric] > OUTLIER_THRESHOLDS[metric];
+    const isOutlier = c[metric] > fence;
     row.innerHTML = `
       <div class="bar-name" title="${c.name}">${c.name}</div>
       <div class="bar-track">
@@ -226,44 +247,55 @@ function renderChart(metric){
     chart.appendChild(row);
   });
 }
+
 document.getElementById('metricToggle').addEventListener('click', e=>{
   const btn = e.target.closest('button');
   if(!btn) return;
   document.querySelectorAll('#metricToggle button').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
-  renderChart(btn.dataset.metric);
+  currentMetric = btn.dataset.metric;
+  renderChart();
 });
-renderChart('business_days');
 
-function makeSortable(tableId, data, rowFn, emptyMsg){
+function makeSortable(tableId, getData, rowFn, emptyMsg){
   const table = document.getElementById(tableId);
   const tbody = table.querySelector('tbody');
   let sortKey = null, asc = true;
-  function draw(rows){
+  function draw(){
+    const data = getData();
+    let rows = data;
+    if(sortKey){
+      rows = [...data].sort((a,b)=>{
+        const va=a[sortKey], vb=b[sortKey];
+        if(typeof va === 'number') return asc ? va-vb : vb-va;
+        return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+      });
+    }
     tbody.innerHTML = rows.length ? rows.map(rowFn).join('') : `<tr><td colspan="6" class="empty">${emptyMsg}</td></tr>`;
+    table.querySelectorAll('th .arrow').forEach(a=>a.remove());
+    if(sortKey){
+      const th = table.querySelector(`th[data-key="${sortKey}"]`);
+      if(th){
+        const arrow = document.createElement('span');
+        arrow.className = 'arrow';
+        arrow.textContent = asc ? '▲' : '▼';
+        th.appendChild(arrow);
+      }
+    }
   }
-  draw(data);
   table.querySelectorAll('th').forEach(th=>{
     th.addEventListener('click', ()=>{
       const key = th.dataset.key;
       asc = (sortKey === key) ? !asc : true;
       sortKey = key;
-      table.querySelectorAll('th .arrow').forEach(a=>a.remove());
-      const arrow = document.createElement('span');
-      arrow.className = 'arrow';
-      arrow.textContent = asc ? '▲' : '▼';
-      th.appendChild(arrow);
-      const sorted = [...data].sort((a,b)=>{
-        const va=a[key], vb=b[key];
-        if(typeof va === 'number') return asc ? va-vb : vb-va;
-        return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
-      });
-      draw(sorted);
+      draw();
     });
   });
+  draw();
+  return draw;
 }
 
-makeSortable('completedTable', completed, c=>`
+const redrawCompleted = makeSortable('completedTable', ()=>ALL_BOARDS[currentBoardKey].completed, c=>`
   <tr>
     <td class="name">${c.name}</td>
     <td>${fmtDate(c.created)}</td>
@@ -272,13 +304,46 @@ makeSortable('completedTable', completed, c=>`
     <td class="num">${c.calendar_days}</td>
   </tr>`, 'Nenhum cartão concluído no período ainda.');
 
-makeSortable('afazerTable', afazer, c=>`
+const redrawAfazer = makeSortable('afazerTable', ()=>ALL_BOARDS[currentBoardKey].afazer, c=>`
   <tr>
     <td class="name">${c.name}${c.business_days_waiting>200?'<span class="flag">+1 ano</span>':''}</td>
     <td>${fmtDate(c.created)}</td>
     <td class="num">${c.business_days_waiting}</td>
     <td class="num">${c.calendar_days_waiting}</td>
   </tr>`, 'Nada parado em A Fazer agora.');
+
+function renderBoard(key){
+  currentBoardKey = key;
+  const board = ALL_BOARDS[key];
+  const s = board.stats;
+
+  document.title = `Lead Time — ${board.name}`;
+  document.getElementById('subtitleText').textContent =
+    `Board ${board.name} · ${fmtPeriodDate(board.period_start)} – ${fmtPeriodDate(board.period_end)}`;
+
+  document.getElementById('flowTodoCount').textContent = s.todo_count;
+  document.getElementById('flowWipCount').textContent = s.wip_count;
+  document.getElementById('flowWipSub').textContent = `${s.wip_stage_count} colunas`;
+  document.getElementById('flowDoneCount').textContent = s.count;
+  document.getElementById('flowDoneSub').textContent = `no período · ${s.done_total} no total`;
+
+  document.getElementById('statCount').textContent = s.count;
+  document.getElementById('statMedian').textContent = s.median_bd_display;
+  document.getElementById('statAvg').textContent = s.avg_bd_display;
+  document.getElementById('statMinmax').textContent = `${s.bd_min}–${s.bd_max}`;
+
+  document.getElementById('sectionNote').textContent = board.note;
+
+  renderChart();
+  redrawCompleted();
+  redrawAfazer();
+}
+
+document.getElementById('boardSelector').addEventListener('change', e=>{
+  renderBoard(e.target.value);
+});
+
+renderBoard(currentBoardKey);
 </script>
 </body>
 </html>
