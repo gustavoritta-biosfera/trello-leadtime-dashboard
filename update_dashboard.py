@@ -80,6 +80,10 @@ STAGE_GROUPS = {
     "Aprovado/Publicação": "done", "Finalizado": "done", "Cancelado": "cancelled",
 }
 
+REVISAO_NAMES = {"Revisão Interna", "Ajuste Interno"}
+CLIENTE_NAMES = {"Aprovação Cliente", "Ajuste Cliente"}
+EXIT_NAMES = {"Aprovado/Publicação", "Agendado", "Finalizado"}
+
 EXCLUDE_CARD_IDS = {"6a32adc6a82a7a69ed99e338"}
 
 BASE = "https://api.trello.com/1"
@@ -92,6 +96,23 @@ def trello_get(path, **params):
     r = requests.get(BASE + path, params=params, timeout=30)
     r.raise_for_status()
     return r.json()
+
+
+def trello_get_all_actions(board_id, max_pages=8):
+    all_actions = []
+    before = None
+    for _ in range(max_pages):
+        params = {"filter": "updateCard:idList", "limit": "1000", "fields": "data,date"}
+        if before:
+            params["before"] = before
+        batch = trello_get(f"/boards/{board_id}/actions", **params)
+        if not batch:
+            break
+        all_actions.extend(batch)
+        if len(batch) < 1000:
+            break
+        before = min(a["date"] for a in batch)
+    return all_actions
 
 
 def to_brt(iso_str):
@@ -148,6 +169,109 @@ def fmt_days(n):
     if float(n).is_integer():
         return str(int(n))
     return f"{n:.1f}".replace(".", ",")
+
+
+def detect_approval_cycles(board, actions, period_start, today):
+    name_to_id = board["lists"]
+    id_to_name = {v: k for k, v in name_to_id.items()}
+    REVISAO_IDS = {name_to_id[n] for n in REVISAO_NAMES}
+    CLIENTE_IDS = {name_to_id[n] for n in CLIENTE_NAMES}
+    APPROVAL_IDS = REVISAO_IDS | CLIENTE_IDS
+    EXIT_IDS = {name_to_id[n] for n in EXIT_NAMES}
+
+    by_card = {}
+    for a in actions:
+        d = a.get("data", {})
+        before, after, card = d.get("listBefore"), d.get("listAfter"), d.get("card")
+        if not before or not after or not card or card["id"] in EXCLUDE_CARD_IDS:
+            continue
+        by_card.setdefault(card["id"], []).append({
+            "t": to_brt(a["date"]), "before": before["id"], "after": after["id"], "name": card.get("name", "")
+        })
+
+    completed, waiting = [], []
+    for cid, moves in by_card.items():
+        moves.sort(key=lambda m: m["t"])
+        in_block_since = None
+        pend_start = pend_list = None
+        segments = []
+        last_cycle = None
+        card_name = moves[-1]["name"]
+        for m in moves:
+            b, a, t = m["before"], m["after"], m["t"]
+            if b not in APPROVAL_IDS and a in APPROVAL_IDS:
+                in_block_since, segments = t, []
+                pend_start, pend_list = t, a
+            elif b in APPROVAL_IDS and a in APPROVAL_IDS:
+                if in_block_since is not None:
+                    segments.append((pend_start, t, pend_list))
+                    pend_start, pend_list = t, a
+            elif b in APPROVAL_IDS and a in EXIT_IDS:
+                if in_block_since is not None:
+                    segments.append((pend_start, t, pend_list))
+                    last_cycle = {"name": card_name, "start": in_block_since, "end": t,
+                                  "segments": list(segments), "exit_id": a}
+                in_block_since, segments = None, []
+            elif b in APPROVAL_IDS and a not in APPROVAL_IDS and a not in EXIT_IDS:
+                in_block_since, segments = None, []
+
+        if last_cycle and period_start <= last_cycle["end"].date() <= today:
+            c = last_cycle
+            rev_bd = cli_bd = rev_cd = cli_cd = 0
+            for seg_start, seg_end, seg_list in c["segments"]:
+                sd, ed = seg_start.date(), seg_end.date()
+                bd, cd = business_days_between(sd, ed), (ed - sd).days
+                if seg_list in REVISAO_IDS:
+                    rev_bd += bd; rev_cd += cd
+                else:
+                    cli_bd += bd; cli_cd += cd
+            sd, ed = c["start"].date(), c["end"].date()
+            completed.append({
+                "name": c["name"], "started": sd.isoformat(), "finished": ed.isoformat(),
+                "exit_stage": id_to_name.get(c["exit_id"], "?"),
+                "rev_bd": rev_bd, "cli_bd": cli_bd, "total_bd": business_days_between(sd, ed),
+                "rev_cd": rev_cd, "cli_cd": cli_cd, "total_cd": (ed - sd).days,
+            })
+
+        if in_block_since is not None:
+            segs_open = list(segments) + [(pend_start, None, pend_list)]
+            rev_bd = cli_bd = rev_cd = cli_cd = 0
+            for seg_start, seg_end, seg_list in segs_open:
+                sd = seg_start.date()
+                ed = seg_end.date() if seg_end else today
+                bd, cd = business_days_between(sd, ed), (ed - sd).days
+                if seg_list in REVISAO_IDS:
+                    rev_bd += bd; rev_cd += cd
+                else:
+                    cli_bd += bd; cli_cd += cd
+            sd = in_block_since.date()
+            waiting.append({
+                "name": card_name, "since": sd.isoformat(),
+                "rev_bd": rev_bd, "cli_bd": cli_bd, "total_bd": business_days_between(sd, today),
+                "rev_cd": rev_cd, "cli_cd": cli_cd, "total_cd": (today - sd).days,
+            })
+
+    completed.sort(key=lambda c: c["finished"])
+    waiting.sort(key=lambda c: -c["total_bd"])
+
+    bd_vals = sorted(c["total_bd"] for c in completed)
+    rev_vals = sorted(c["rev_bd"] for c in completed)
+    cli_vals = sorted(c["cli_bd"] for c in completed)
+    n = len(completed)
+    fence_bd = iqr_upper_fence(bd_vals)
+
+    return {
+        "completed": completed,
+        "waiting": waiting,
+        "stats": {
+            "count": n,
+            "median_total_bd": median(bd_vals), "median_total_bd_display": fmt_days(median(bd_vals)),
+            "median_rev_bd": median(rev_vals), "median_rev_bd_display": fmt_days(median(rev_vals)),
+            "median_cli_bd": median(cli_vals), "median_cli_bd_display": fmt_days(median(cli_vals)),
+            "fence_bd": fence_bd if fence_bd != float("inf") else 999999,
+            "waiting_count": len(waiting),
+        },
+    }
 
 
 def build_dataset(board):
@@ -236,6 +360,9 @@ def build_dataset(board):
     else:
         note = "Cartões ordenados do menor para o maior lead time. A linha vertical marca a mediana."
 
+    all_actions = trello_get_all_actions(board_id)
+    approval = detect_approval_cycles(board, all_actions, period_start, today)
+
     return {
         "name": board["name"],
         "period_start": period_start.isoformat(),
@@ -254,6 +381,7 @@ def build_dataset(board):
             "wip_stage_count": len(WIP_LISTS),
         },
         "note": note,
+        "approval": approval,
     }
 
 
@@ -288,4 +416,6 @@ if __name__ == "__main__":
 
     for k in board_order:
         s = all_data[k]["stats"]
-        print(f"OK [{all_data[k]['name']}]: {s['count']} cartoes concluidos, mediana {s['median_bd_display']} dias uteis")
+        ap = all_data[k]["approval"]["stats"]
+        print(f"OK [{all_data[k]['name']}]: {s['count']} cartoes concluidos, mediana {s['median_bd_display']} dias uteis | "
+              f"aprovacao: {ap['count']} ciclos, mediana total {ap['median_total_bd_display']} dias uteis")

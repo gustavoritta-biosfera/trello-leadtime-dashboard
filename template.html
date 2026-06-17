@@ -86,6 +86,11 @@
   footer{border-top:1px solid var(--line);padding-top:24px;font-size:12px;color:var(--muted);max-width:700px;}
   footer p{margin:0 0 10px;}
   footer strong{color:var(--ink);}
+
+  .bar-track.stacked{background:transparent;}
+  .bar-fill-rev{position:absolute;left:0;top:0;bottom:0;background:var(--petrol);border-radius:3px 0 0 3px;min-width:0;}
+  .bar-fill-cli{position:absolute;top:0;bottom:0;background:var(--amber);border-radius:0 3px 3px 0;min-width:0;}
+  .bar-track.outlier{box-shadow:0 0 0 1px var(--alert);border-radius:3px;}
   @media (max-width:720px){
     .stats{grid-template-columns:repeat(2,1fr);}
     .bar-name{flex:0 0 130px;font-size:11px;}
@@ -187,6 +192,67 @@
     </table>
   </section>
 
+  <section>
+    <div class="section-head"><h2>Cycle time da etapa de Aprovação</h2></div>
+    <p class="section-note">Mede o tempo entre a entrada do cartão em Revisão Interna e a saída para Aprovado/Publicação, Agendado ou Finalizado, considerando idas e vindas entre as quatro colunas do bloco (Revisão Interna, Ajuste Interno, Aprovação Cliente, Ajuste Cliente). Quando um cartão passa pelo bloco mais de uma vez, é considerado o ciclo mais recente concluído no período.</p>
+    <div class="stats">
+      <div class="stat"><span class="stat-value" id="apStatCount">0</span><span class="stat-label">ciclos concluídos no período</span></div>
+      <div class="stat"><span class="stat-value" id="apStatTotal">0</span><span class="stat-label">mediana do ciclo completo, dias úteis</span></div>
+      <div class="stat"><span class="stat-value" id="apStatRev">0</span><span class="stat-label">mediana em Revisão/Ajuste Interno</span></div>
+      <div class="stat"><span class="stat-value" id="apStatCli">0</span><span class="stat-label">mediana em Aprovação/Ajuste Cliente</span></div>
+    </div>
+    <div class="section-head">
+      <h2 style="font-size:16px;">Ciclo por cartão</h2>
+      <div class="toggle" id="apMetricToggle">
+        <button data-metric="bd" class="active">dias úteis</button>
+        <button data-metric="cd">dias corridos</button>
+      </div>
+    </div>
+    <div class="chart" id="apChart"></div>
+    <div class="chart-legend">
+      <span><span class="dot" style="background:var(--petrol)"></span>Revisão / Ajuste Interno</span>
+      <span><span class="dot" style="background:var(--amber)"></span>Aprovação / Ajuste Cliente</span>
+      <span><span class="dot" style="background:transparent;border:1px solid var(--alert)"></span>fora da curva (contorno)</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Detalhe dos ciclos de aprovação</h2></div>
+    <p class="section-note">Clique no cabeçalho de uma coluna para ordenar.</p>
+    <table id="apCompletedTable">
+      <thead>
+        <tr>
+          <th data-key="name">Cartão</th>
+          <th data-key="started">Entrou em Revisão</th>
+          <th data-key="finished">Saiu em</th>
+          <th data-key="exit_stage">Saiu para</th>
+          <th data-key="rev_bd" class="num">Dias úteis Revisão/Ajuste Interno</th>
+          <th data-key="cli_bd" class="num">Dias úteis Aprovação/Ajuste Cliente</th>
+          <th data-key="total_bd" class="num">Total dias úteis</th>
+          <th data-key="total_cd" class="num">Total dias corridos</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Aguardando aprovação agora</h2></div>
+    <p class="section-note">Cartões que estão neste momento em Revisão Interna, Ajuste Interno, Aprovação Cliente ou Ajuste Cliente, com o tempo acumulado nesse bloco contado até hoje. Ainda não têm ciclo completo, porque ainda não saíram do bloco.</p>
+    <table id="apWaitingTable">
+      <thead>
+        <tr>
+          <th data-key="name">Cartão</th>
+          <th data-key="since">Entrou em Revisão</th>
+          <th data-key="rev_bd" class="num">Dias úteis Revisão/Ajuste Interno</th>
+          <th data-key="cli_bd" class="num">Dias úteis Aprovação/Ajuste Cliente</th>
+          <th data-key="total_bd" class="num">Total dias úteis até hoje</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
   <footer>
     <p><strong>Atualização.</strong> Este dashboard é regenerado automaticamente toda segunda-feira de manhã, direto a partir dos boards no Trello, por um robô configurado no GitHub. Também pode ser disparado manualmente entre uma atualização e outra.</p>
     <p><strong>Critério de conclusão.</strong> Um cartão entra na análise de lead time se a última movimentação de lista registrada nele dentro do período o levou para Aprovado/Publicação ou Finalizado, e ele permanece numa dessas duas listas até hoje. Cartões que passaram por Finalizado e voltaram (reabertos) não contam como concluídos.</p>
@@ -195,6 +261,7 @@
     <p><strong>Fuso horário.</strong> Todas as datas foram convertidas para o horário de Brasília (UTC-3) antes do cálculo de dias úteis.</p>
     <p><strong>Fora da curva.</strong> Os cartões destacados em vermelho no gráfico são identificados estatisticamente (regra do intervalo interquartil), e não por uma lista fixa, então o destaque se ajusta sozinho conforme os dados mudam.</p>
     <p><strong>Estrutura padronizada.</strong> Todos os boards monitorados seguem as mesmas 15 colunas e os mesmos critérios de agrupamento, o que permite comparação direta entre eles ao trocar o seletor acima.</p>
+    <p><strong>Ciclo de aprovação.</strong> Reconstruído a partir do histórico completo de movimentações do cartão entre listas, e não apenas da última. O ciclo começa na entrada em Revisão Interna e termina na primeira saída para Aprovado/Publicação, Agendado ou Finalizado. Enquanto isso, o tempo soma todas as passagens do cartão por Revisão Interna e Ajuste Interno de um lado, e por Aprovação Cliente e Ajuste Cliente de outro, mesmo que ele vá e volte entre essas colunas várias vezes; a soma dos dois blocos é sempre igual ao ciclo completo. Se o cartão sair do bloco de volta para uma etapa de produção anterior, o ciclo em andamento é descartado e um novo só passa a contar a partir da próxima entrada em Revisão Interna.</p>
     <p><strong>Exclusão.</strong> Cartões de teste usados durante a configuração desta automação são removidos automaticamente da análise.</p>
   </footer>
 
@@ -217,6 +284,7 @@ function fmtPeriodDate(iso){
 
 let currentBoardKey = BOARD_ORDER[0];
 let currentMetric = 'business_days';
+let currentApMetric = 'bd';
 
 function renderChart(){
   const board = ALL_BOARDS[currentBoardKey];
@@ -248,6 +316,38 @@ function renderChart(){
   });
 }
 
+
+function renderApprovalChart(){
+  const board = ALL_BOARDS[currentBoardKey];
+  const completed = board.approval.completed;
+  const chart = document.getElementById('apChart');
+  chart.innerHTML = '';
+  if(completed.length === 0){
+    chart.innerHTML = '<p class="empty">Nenhum ciclo de aprovação concluído no período ainda.</p>';
+    return;
+  }
+  const suf = currentApMetric === 'bd' ? '_bd' : '_cd';
+  const sorted = [...completed].sort((a,b)=>a['total'+suf]-b['total'+suf]);
+  const max = Math.max(...sorted.map(c=>c['total'+suf]));
+  const fence = board.approval.stats.fence_bd;
+  sorted.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    const total = c['total'+suf], rev = c['rev'+suf], cli = c['cli'+suf];
+    const revPct = max ? (rev/max*100) : 0;
+    const cliPct = max ? (cli/max*100) : 0;
+    const isOutlier = currentApMetric === 'bd' && total > fence;
+    row.innerHTML = `
+      <div class="bar-name" title="${c.name}">${c.name}</div>
+      <div class="bar-track stacked ${isOutlier?'outlier':''}">
+        <div class="bar-fill-rev" style="width:${revPct}%"></div>
+        <div class="bar-fill-cli" style="left:${revPct}%;width:${cliPct}%"></div>
+      </div>
+      <div class="bar-value">${total} d.</div>`;
+    chart.appendChild(row);
+  });
+}
+
 document.getElementById('metricToggle').addEventListener('click', e=>{
   const btn = e.target.closest('button');
   if(!btn) return;
@@ -255,6 +355,15 @@ document.getElementById('metricToggle').addEventListener('click', e=>{
   btn.classList.add('active');
   currentMetric = btn.dataset.metric;
   renderChart();
+});
+
+document.getElementById('apMetricToggle').addEventListener('click', e=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('#apMetricToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentApMetric = btn.dataset.metric;
+  renderApprovalChart();
 });
 
 function makeSortable(tableId, getData, rowFn, emptyMsg){
@@ -312,6 +421,27 @@ const redrawAfazer = makeSortable('afazerTable', ()=>ALL_BOARDS[currentBoardKey]
     <td class="num">${c.calendar_days_waiting}</td>
   </tr>`, 'Nada parado em A Fazer agora.');
 
+const redrawApCompleted = makeSortable('apCompletedTable', ()=>ALL_BOARDS[currentBoardKey].approval.completed, c=>`
+  <tr>
+    <td class="name">${c.name}</td>
+    <td>${fmtDate(c.started)}</td>
+    <td>${fmtDate(c.finished)}</td>
+    <td>${c.exit_stage}</td>
+    <td class="num">${c.rev_bd}</td>
+    <td class="num">${c.cli_bd}</td>
+    <td class="num">${c.total_bd}</td>
+    <td class="num">${c.total_cd}</td>
+  </tr>`, 'Nenhum ciclo de aprovação concluído no período ainda.');
+
+const redrawApWaiting = makeSortable('apWaitingTable', ()=>ALL_BOARDS[currentBoardKey].approval.waiting, c=>`
+  <tr>
+    <td class="name">${c.name}</td>
+    <td>${fmtDate(c.since)}</td>
+    <td class="num">${c.rev_bd}</td>
+    <td class="num">${c.cli_bd}</td>
+    <td class="num">${c.total_bd}</td>
+  </tr>`, 'Nada parado em Aprovação agora.');
+
 function renderBoard(key){
   currentBoardKey = key;
   const board = ALL_BOARDS[key];
@@ -334,9 +464,18 @@ function renderBoard(key){
 
   document.getElementById('sectionNote').textContent = board.note;
 
+  const ap = board.approval.stats;
+  document.getElementById('apStatCount').textContent = ap.count;
+  document.getElementById('apStatTotal').textContent = ap.median_total_bd_display;
+  document.getElementById('apStatRev').textContent = ap.median_rev_bd_display;
+  document.getElementById('apStatCli').textContent = ap.median_cli_bd_display;
+
   renderChart();
   redrawCompleted();
   redrawAfazer();
+  renderApprovalChart();
+  redrawApCompleted();
+  redrawApWaiting();
 }
 
 document.getElementById('boardSelector').addEventListener('change', e=>{
