@@ -449,9 +449,17 @@ def build_card_reached_dates(board, actions, current_cards):
 
 
 def build_cfd_series(reached, period_start, period_end):
+    # Abordagem por coorte: o CFD acompanha apenas os cartoes cuja chegada ao
+    # Backlog (criacao) caiu dentro do periodo selecionado, e mostra o caminho
+    # desses cartoes especificos pelas etapas. Isso faz os valores serem
+    # proprios do periodo, em vez de um total acumulado desde sempre do board.
+    cohort = {
+        cid: v for cid, v in reached.items()
+        if "Backlog" in v["reached"] and period_start <= v["reached"]["Backlog"].date() <= period_end
+    }
     sorted_dates = {}
     for macro in MACRO_ORDER:
-        ds = sorted(v["reached"][macro].date() for v in reached.values() if macro in v["reached"])
+        ds = sorted(v["reached"][macro].date() for v in cohort.values() if macro in v["reached"])
         sorted_dates[macro] = ds
     n_days = (period_end - period_start).days + 1
     dates = [(period_start + timedelta(days=i)).isoformat() for i in range(n_days)]
@@ -459,7 +467,7 @@ def build_cfd_series(reached, period_start, period_end):
     for macro in MACRO_ORDER:
         ds = sorted_dates[macro]
         series[macro] = [bisect.bisect_right(ds, period_start + timedelta(days=i)) for i in range(n_days)]
-    return {"dates": dates, "series": series}
+    return {"dates": dates, "series": series, "cohort_size": len(cohort)}
 
 
 def build_dataset(board):

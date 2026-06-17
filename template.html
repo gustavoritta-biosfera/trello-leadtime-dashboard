@@ -158,7 +158,8 @@
         <button data-stage="Finalizado">Finalizado</button>
       </div>
     </div>
-    <p class="section-note">Mostra, dia a dia, quantos cartões já alcançaram cada macro etapa do fluxo, de forma acumulada. A distância vertical entre duas faixas em um dia é o WIP daquela etapa naquele momento; a distância horizontal é o tempo aproximado de travessia. Cartões em Cancelado são excluídos. Se um cartão volta para uma etapa anterior, ele continua contando como tendo alcançado a etapa mais avançada, que é a convenção padrão de CFD.</p>
+    <p class="section-note">Acompanha apenas os cartões que chegaram ao board (foram criados) dentro do período selecionado, mostrando o caminho desses cartões específicos pelas etapas, dia a dia, de forma acumulada. A distância vertical entre duas faixas em um dia é o WIP daquela etapa naquele momento; a distância horizontal é o tempo aproximado de travessia. Cartões em Cancelado são excluídos. Se um cartão volta para uma etapa anterior, ele continua contando como tendo alcançado a etapa mais avançada, que é a convenção padrão de CFD.</p>
+    <p class="section-note" id="cfdCohortNote"></p>
     <div class="chart" id="cfdChart" style="padding:14px 14px 6px;"></div>
     <div class="chart-legend" id="cfdLegend"></div>
   </section>
@@ -395,8 +396,13 @@ function renderCfd(){
   const n = dates.length;
   const el = document.getElementById('cfdChart');
   const legendEl = document.getElementById('cfdLegend');
-  if(n === 0){
-    el.innerHTML = '<p class="empty">Sem dados para este período.</p>';
+  const cohortEl = document.getElementById('cfdCohortNote');
+  const cs = cfd.cohort_size;
+  cohortEl.textContent = cs === 0
+    ? `Nenhum cartão novo chegou ao board durante ${p.label.toLowerCase()}.`
+    : `${cs} ${cs===1?'cartão chegou':'cartões chegaram'} ao board durante ${p.label.toLowerCase()}, e o gráfico acompanha o caminho ${cs===1?'dele':'deles'} pelas etapas.`;
+  if(n === 0 || cs === 0){
+    el.innerHTML = '<p class="empty">Sem cartões novos neste período para montar o gráfico.</p>';
     legendEl.innerHTML = '';
     return;
   }
