@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lead Time — 3DI Biogás</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF8F2;
+    --paper:#FFFFFF;
+    --ink:#1C2620;
+    --muted:#737A6C;
+    --line:#E5E0D2;
+    --primary:#2F6F4E;
+    --primary-light:#DFEAE2;
+    --amber:#C97D2E;
+    --amber-light:#F6E6CE;
+    --petrol:#1B4965;
+    --petrol-light:#DCE7ED;
+    --alert:#B5562F;
+    --font-display:'Space Grotesk', sans-serif;
+    --font-body:'IBM Plex Sans', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);line-height:1.5;padding:48px 24px 80px;}
+  .wrap{max-width:980px;margin:0 auto;}
+  .eyebrow{font-family:var(--font-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--primary);margin:0 0 10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .eyebrow .freshness{color:var(--muted);text-transform:none;letter-spacing:0;font-size:11px;}
+  h1{font-family:var(--font-display);font-weight:700;font-size:44px;line-height:1.05;margin:0 0 8px;letter-spacing:-0.01em;}
+  .subtitle{font-size:16px;color:var(--muted);margin:0 0 4px;}
+  .methodology{font-size:13px;color:var(--muted);max-width:640px;margin:14px 0 0;}
+  .flow{display:flex;align-items:center;gap:0;margin:40px 0 36px;padding:28px 8px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);}
+  .flow-stage{flex:1 1 0;text-align:center;padding:0 8px;}
+  .flow-count{display:block;font-family:var(--font-display);font-size:38px;font-weight:700;line-height:1;}
+  .flow-stage[data-stage="todo"] .flow-count{color:var(--amber);}
+  .flow-stage[data-stage="wip"] .flow-count{color:var(--petrol);}
+  .flow-stage[data-stage="done"] .flow-count{color:var(--primary);}
+  .flow-label{display:block;font-size:13px;margin-top:4px;color:var(--ink);font-weight:500;}
+  .flow-sub{display:block;font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:2px;}
+  .flow-pipe{flex:0 0 64px;height:2px;background:var(--line);position:relative;overflow:hidden;}
+  .flow-pipe::after{content:"";position:absolute;top:-3px;left:0;width:8px;height:8px;border-radius:50%;background:var(--muted);opacity:.55;animation:flowmove 2.8s linear infinite;}
+  @keyframes flowmove{from{left:-8px;} to{left:100%;}}
+  @media (prefers-reduced-motion: reduce){.flow-pipe::after{animation:none;left:46%;}}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:44px;}
+  .stat{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px 16px;}
+  .stat-value{display:block;font-family:var(--font-mono);font-size:28px;font-weight:600;color:var(--ink);}
+  .stat-label{display:block;font-size:12px;color:var(--muted);margin-top:4px;}
+  section{margin-bottom:56px;}
+  .section-head{display:flex;justify-content:space-between;align-items:baseline;gap:16px;margin-bottom:6px;flex-wrap:wrap;}
+  h2{font-family:var(--font-display);font-size:22px;font-weight:600;margin:0;}
+  .section-note{font-size:13px;color:var(--muted);margin:0 0 18px;max-width:680px;}
+  .toggle{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-family:var(--font-mono);font-size:12px;}
+  .toggle button{border:none;background:var(--paper);color:var(--muted);padding:7px 12px;cursor:pointer;font-family:inherit;font-size:inherit;}
+  .toggle button.active{background:var(--primary);color:#fff;}
+  .chart{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:18px 20px 8px;}
+  .bar-row{display:flex;align-items:center;gap:10px;height:25px;}
+  .bar-name{flex:0 0 230px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);}
+  .bar-track{flex:1 1 auto;position:relative;height:14px;background:transparent;}
+  .bar-fill{position:absolute;left:0;top:0;bottom:0;background:var(--primary);border-radius:3px;min-width:3px;}
+  .bar-fill.outlier{background:var(--alert);}
+  .bar-value{flex:0 0 70px;font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:right;}
+  .median-line{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--petrol);opacity:.5;}
+  .chart-legend{display:flex;gap:18px;font-size:11px;color:var(--muted);margin:14px 2px 4px;align-items:center;}
+  .chart-legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+  .empty{font-size:13px;color:var(--muted);padding:14px 4px;}
+  table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px;}
+  thead th{text-align:left;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--bg);padding:10px 14px;cursor:pointer;user-select:none;border-bottom:1px solid var(--line);white-space:nowrap;}
+  thead th:hover{color:var(--ink);}
+  thead th .arrow{font-size:10px;margin-left:3px;opacity:.6;}
+  tbody td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:top;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr:hover{background:#FBFAF6;}
+  td.num,th.num{font-family:var(--font-mono);text-align:right;}
+  td.name{max-width:380px;}
+  .flag{display:inline-block;margin-left:6px;font-size:10px;font-family:var(--font-mono);color:var(--alert);border:1px solid var(--alert);border-radius:4px;padding:1px 5px;vertical-align:middle;}
+  footer{border-top:1px solid var(--line);padding-top:24px;font-size:12px;color:var(--muted);max-width:700px;}
+  footer p{margin:0 0 10px;}
+  footer strong{color:var(--ink);}
+  @media (max-width:720px){
+    .stats{grid-template-columns:repeat(2,1fr);}
+    .bar-name{flex:0 0 130px;font-size:11px;}
+    h1{font-size:32px;}
+    .flow{flex-wrap:wrap;}
+    .flow-pipe{display:none;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Modelo de análise · Kanban / Trello <span class="freshness">· atualizado em __GENERATED_AT__ (Brasília)</span></p>
+  <h1>Lead Time</h1>
+  <p class="subtitle">Board 3DI Biogás &middot; __PERIOD_START__ – __PERIOD_END__</p>
+  <p class="methodology">Lead time contado em <strong>dias úteis</strong> (segunda a sexta, sem exclusão de feriados), da criação do cartão até a entrada definitiva no grupo <strong>Finalizado</strong>. Detalhes do critério no final da página.</p>
+
+  <div class="flow">
+    <div class="flow-stage" data-stage="todo">
+      <span class="flow-count">__TODO_COUNT__</span>
+      <span class="flow-label">A Fazer</span>
+      <span class="flow-sub">aguardando início</span>
+    </div>
+    <div class="flow-pipe"></div>
+    <div class="flow-stage" data-stage="wip">
+      <span class="flow-count">__WIP_COUNT__</span>
+      <span class="flow-label">Em andamento (WIP)</span>
+      <span class="flow-sub">9 colunas</span>
+    </div>
+    <div class="flow-pipe"></div>
+    <div class="flow-stage" data-stage="done">
+      <span class="flow-count">__DONE_PERIOD_COUNT__</span>
+      <span class="flow-label">Finalizado</span>
+      <span class="flow-sub">no período · __DONE_TOTAL_COUNT__ no total</span>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="stat-value">__STAT_COUNT__</span><span class="stat-label">cartões concluídos no período</span></div>
+    <div class="stat"><span class="stat-value">__STAT_MEDIAN__</span><span class="stat-label">mediana, dias úteis</span></div>
+    <div class="stat"><span class="stat-value">__STAT_AVG__</span><span class="stat-label">média, dias úteis</span></div>
+    <div class="stat"><span class="stat-value">__STAT_MINMAX__</span><span class="stat-label">mínimo–máximo, dias úteis</span></div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <h2>Lead time por cartão</h2>
+      <div class="toggle" id="metricToggle">
+        <button data-metric="business_days" class="active">dias úteis</button>
+        <button data-metric="calendar_days">dias corridos</button>
+      </div>
+    </div>
+    <p class="section-note">__SECTION_NOTE__</p>
+    <div class="chart" id="chart"></div>
+    <div class="chart-legend">
+      <span><span class="dot" style="background:var(--primary)"></span>dentro da distribuição</span>
+      <span><span class="dot" style="background:var(--alert)"></span>fora da curva</span>
+      <span><span class="dot" style="background:var(--petrol)"></span>mediana</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Detalhe dos cartões concluídos</h2></div>
+    <p class="section-note">Clique no cabeçalho de uma coluna para ordenar.</p>
+    <table id="completedTable">
+      <thead>
+        <tr>
+          <th data-key="name">Cartão</th>
+          <th data-key="created">Criado em</th>
+          <th data-key="completed">Concluído em</th>
+          <th data-key="business_days" class="num">Dias úteis</th>
+          <th data-key="calendar_days" class="num">Dias corridos</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Aguardando em A Fazer</h2></div>
+    <p class="section-note">Cartões parados antes do início do trabalho (Backlog, Aguardando Material, Criação de Briefing), com o tempo de espera contado até hoje. Ainda não têm lead time, porque não foram concluídos.</p>
+    <table id="afazerTable">
+      <thead>
+        <tr>
+          <th data-key="name">Cartão</th>
+          <th data-key="created">Criado em</th>
+          <th data-key="business_days_waiting" class="num">Dias úteis esperando</th>
+          <th data-key="calendar_days_waiting" class="num">Dias corridos esperando</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p><strong>Atualização.</strong> Este dashboard é regenerado automaticamente toda segunda-feira de manhã, direto a partir do board no Trello, por um robô configurado no GitHub. Também pode ser disparado manualmente entre uma atualização e outra.</p>
+    <p><strong>Critério de conclusão.</strong> Um cartão entra na análise de lead time se a última movimentação de lista registrada nele dentro do período o levou para Aprovado/Publicação ou Finalizado, e ele permanece numa dessas duas listas até hoje. Cartões que passaram por Finalizado e voltaram (reabertos) não contam como concluídos.</p>
+    <p><strong>Período.</strong> O período considerado vai de 1º de janeiro do ano atual até hoje, e se renova automaticamente a cada janeiro.</p>
+    <p><strong>Data de criação.</strong> Estimada a partir do identificador do cartão no Trello, que carrega o instante de criação em sua própria estrutura, e não a partir de uma ação de "criação" separada.</p>
+    <p><strong>Fuso horário.</strong> Todas as datas foram convertidas para o horário de Brasília (UTC-3) antes do cálculo de dias úteis.</p>
+    <p><strong>Fora da curva.</strong> Os cartões destacados em vermelho no gráfico são identificados estatisticamente (regra do intervalo interquartil), e não por uma lista fixa, então o destaque se ajusta sozinho conforme os dados mudam.</p>
+    <p><strong>Exclusão.</strong> O cartão "Teste de Tarefa Claude Conector" é removido automaticamente desta análise.</p>
+    <p>Modelo inicial construído para o board 3DI Biogás. A mesma lógica pode ser aplicada a outros boards.</p>
+  </footer>
+
+</div>
+
+<script>
+const completed = __COMPLETED_JSON__;
+const afazer = __AFAZER_JSON__;
+const MEDIAN_VALUES = __MEDIAN_VALUES_JSON__;
+const OUTLIER_THRESHOLDS = __OUTLIER_THRESHOLDS_JSON__;
+
+function fmtDate(iso){
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y.slice(2)}`;
+}
+
+let currentMetric = 'business_days';
+function renderChart(metric){
+  currentMetric = metric;
+  const chart = document.getElementById('chart');
+  chart.innerHTML = '';
+  if(completed.length === 0){
+    chart.innerHTML = '<p class="empty">Nenhum cartão concluído no período ainda.</p>';
+    return;
+  }
+  const sorted = [...completed].sort((a,b)=>a[metric]-b[metric]);
+  const max = Math.max(...sorted.map(c=>c[metric]));
+  const medianVal = MEDIAN_VALUES[metric];
+  sorted.forEach(c=>{
+    const row = document.createElement('div');
+    row.className = 'bar-row';
+    const pct = max ? (c[metric]/max*100) : 0;
+    const isOutlier = c[metric] > OUTLIER_THRESHOLDS[metric];
+    row.innerHTML = `
+      <div class="bar-name" title="${c.name}">${c.name}</div>
+      <div class="bar-track">
+        <div class="median-line" style="left:${max?(medianVal/max*100):0}%"></div>
+        <div class="bar-fill ${isOutlier?'outlier':''}" style="width:${pct}%"></div>
+      </div>
+      <div class="bar-value">${c[metric]} d.</div>`;
+    chart.appendChild(row);
+  });
+}
+document.getElementById('metricToggle').addEventListener('click', e=>{
+  const btn = e.target.closest('button');
+  if(!btn) return;
+  document.querySelectorAll('#metricToggle button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderChart(btn.dataset.metric);
+});
+renderChart('business_days');
+
+function makeSortable(tableId, data, rowFn, emptyMsg){
+  const table = document.getElementById(tableId);
+  const tbody = table.querySelector('tbody');
+  let sortKey = null, asc = true;
+  function draw(rows){
+    tbody.innerHTML = rows.length ? rows.map(rowFn).join('') : `<tr><td colspan="6" class="empty">${emptyMsg}</td></tr>`;
+  }
+  draw(data);
+  table.querySelectorAll('th').forEach(th=>{
+    th.addEventListener('click', ()=>{
+      const key = th.dataset.key;
+      asc = (sortKey === key) ? !asc : true;
+      sortKey = key;
+      table.querySelectorAll('th .arrow').forEach(a=>a.remove());
+      const arrow = document.createElement('span');
+      arrow.className = 'arrow';
+      arrow.textContent = asc ? '▲' : '▼';
+      th.appendChild(arrow);
+      const sorted = [...data].sort((a,b)=>{
+        const va=a[key], vb=b[key];
+        if(typeof va === 'number') return asc ? va-vb : vb-va;
+        return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+      });
+      draw(sorted);
+    });
+  });
+}
+
+makeSortable('completedTable', completed, c=>`
+  <tr>
+    <td class="name">${c.name}</td>
+    <td>${fmtDate(c.created)}</td>
+    <td>${fmtDate(c.completed)}</td>
+    <td class="num">${c.business_days}</td>
+    <td class="num">${c.calendar_days}</td>
+  </tr>`, 'Nenhum cartão concluído no período ainda.');
+
+makeSortable('afazerTable', afazer, c=>`
+  <tr>
+    <td class="name">${c.name}${c.business_days_waiting>200?'<span class="flag">+1 ano</span>':''}</td>
+    <td>${fmtDate(c.created)}</td>
+    <td class="num">${c.business_days_waiting}</td>
+    <td class="num">${c.calendar_days_waiting}</td>
+  </tr>`, 'Nada parado em A Fazer agora.');
+</script>
+</body>
+</html>
