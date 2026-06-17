@@ -1,6 +1,9 @@
 import os
 import json
+import bisect
+import calendar
 from datetime import datetime, timedelta, date
+from collections import defaultdict
 import requests
 
 TRELLO_KEY = os.environ["TRELLO_KEY"]
@@ -72,17 +75,26 @@ BOARDS = [
         "Cancelado": "6839f0e8533dc3eb256537ce"}},
 ]
 
-STAGE_GROUPS = {
-    "Backlog": "todo", "Criação de Briefing": "todo", "Aguardando Material": "todo",
-    "Liberado Produção": "wip", "Andamento Texto": "wip", "Andamento Ritta": "wip",
-    "Andamento Castro": "wip", "Revisão Interna": "wip", "Ajuste Interno": "wip",
-    "Aprovação Cliente": "wip", "Ajuste Cliente": "wip", "Agendado": "wip",
-    "Aprovado/Publicação": "done", "Finalizado": "done", "Cancelado": "cancelled",
-}
-
 REVISAO_NAMES = {"Revisão Interna", "Ajuste Interno"}
 CLIENTE_NAMES = {"Aprovação Cliente", "Ajuste Cliente"}
 EXIT_NAMES = {"Aprovado/Publicação", "Agendado", "Finalizado"}
+
+MACRO_ORDER = ["Backlog", "Produção", "Aprovação", "Agendado", "Finalizado"]
+MACRO_STAGE_NAMES = {
+    "Backlog": ["Backlog", "Criação de Briefing", "Aguardando Material"],
+    "Produção": ["Liberado Produção", "Andamento Texto", "Andamento Ritta", "Andamento Castro"],
+    "Aprovação": ["Revisão Interna", "Ajuste Interno", "Aprovação Cliente", "Ajuste Cliente"],
+    "Agendado": ["Agendado"],
+    "Finalizado": ["Aprovado/Publicação", "Finalizado"],
+}
+
+PERIOD_DEFS = [
+    ("1m", "Último mês", 1),
+    ("3m", "Últimos 3 meses", 3),
+    ("6m", "Últimos 6 meses", 6),
+    ("9m", "Últimos 9 meses", 9),
+    ("12m", "Últimos 12 meses", 12),
+]
 
 EXCLUDE_CARD_IDS = {"6a32adc6a82a7a69ed99e338"}
 
@@ -102,7 +114,7 @@ def trello_get_all_actions(board_id, max_pages=8):
     all_actions = []
     before = None
     for _ in range(max_pages):
-        params = {"filter": "updateCard:idList", "limit": "1000", "fields": "data,date"}
+        params = {"filter": "createCard,updateCard:idList", "limit": "1000", "fields": "data,date,type"}
         if before:
             params["before"] = before
         batch = trello_get(f"/boards/{board_id}/actions", **params)
@@ -123,6 +135,14 @@ def to_brt(iso_str):
 def created_date_brt(card_id):
     ts = int(card_id[:8], 16)
     return datetime.utcfromtimestamp(ts) + BRT_OFFSET
+
+
+def months_ago(d, n):
+    month = d.month - n
+    year = d.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
 
 
 def business_days_between(start_date, end_date):
@@ -171,7 +191,108 @@ def fmt_days(n):
     return f"{n:.1f}".replace(".", ",")
 
 
-def detect_approval_cycles(board, actions, period_start, today):
+def extract_list(d, key):
+    if d is None:
+        return []
+    if isinstance(d, list):
+        return d
+    if isinstance(d, dict):
+        return d.get(key, d.get("data", []))
+    return []
+
+
+def build_lead_time_all(board, actions, current_cards):
+    name_to_id = board["lists"]
+    DONE_LISTS = {name_to_id["Aprovado/Publicação"], name_to_id["Finalizado"]}
+    TODO_LISTS = {name_to_id["Backlog"], name_to_id["Criação de Briefing"], name_to_id["Aguardando Material"]}
+
+    creates_first = {}
+    by_card = {}
+    for a in actions:
+        d = a.get("data", {})
+        card = d.get("card")
+        if not card or card["id"] in EXCLUDE_CARD_IDS:
+            continue
+        cid = card["id"]
+        if a.get("type") == "createCard" and d.get("list"):
+            t = to_brt(a["date"])
+            if cid not in creates_first or t < creates_first[cid]:
+                creates_first[cid] = t
+        elif a.get("type") == "updateCard" and d.get("listAfter"):
+            t = to_brt(a["date"])
+            if cid not in by_card or t > by_card[cid]["dt"]:
+                by_card[cid] = {"dt": t, "name": card.get("name", ""), "listAfter_id": d["listAfter"]["id"]}
+
+    def creation_dt(cid):
+        return creates_first.get(cid) or created_date_brt(cid)
+
+    completed_all = []
+    for cid, info in by_card.items():
+        if info["listAfter_id"] in DONE_LISTS:
+            created = creation_dt(cid)
+            comp_dt = info["dt"]
+            completed_all.append({
+                "id": cid, "name": info["name"],
+                "created": created.date().isoformat(), "completed": comp_dt.date().isoformat(),
+                "calendar_days": (comp_dt.date() - created.date()).days,
+                "business_days": business_days_between(created.date(), comp_dt.date()),
+            })
+
+    afazer = []
+    today = date.today()
+    for c in current_cards:
+        if c["id"] in EXCLUDE_CARD_IDS:
+            continue
+        if c["idList"] in TODO_LISTS:
+            created = creation_dt(c["id"]).date()
+            afazer.append({
+                "id": c["id"], "name": c["name"], "created": created.isoformat(),
+                "business_days_waiting": business_days_between(created, today),
+                "calendar_days_waiting": (today - created).days,
+            })
+    afazer.sort(key=lambda c: -c["business_days_waiting"])
+    return completed_all, afazer
+
+
+def lead_time_stats_for_period(completed_all, period_start, period_end):
+    completed = [c for c in completed_all if period_start <= date.fromisoformat(c["completed"]) <= period_end]
+    completed.sort(key=lambda c: c["completed"])
+    bd_vals = sorted(c["business_days"] for c in completed)
+    cd_vals = sorted(c["calendar_days"] for c in completed)
+    n = len(completed)
+    median_bd, median_cd = median(bd_vals), median(cd_vals)
+    avg_bd = round(sum(bd_vals) / n, 1) if n else 0
+    bd_min, bd_max = (min(bd_vals), max(bd_vals)) if n else (0, 0)
+    fence_bd, fence_cd = iqr_upper_fence(bd_vals), iqr_upper_fence(cd_vals)
+    outliers = [c for c in completed if c["business_days"] > fence_bd]
+    rest = [c for c in completed if c not in outliers]
+    avg_wo = round(sum(c["business_days"] for c in rest) / len(rest), 1) if rest else avg_bd
+    if outliers:
+        plural = len(outliers) > 1
+        note = (
+            f"Cartões ordenados do menor para o maior lead time. A linha vertical marca a mediana. "
+            f"{len(outliers)} {'cartões' if plural else 'cartão'} "
+            f"{'destacados' if plural else 'destacado'} em vermelho "
+            f"{'estão' if plural else 'está'} fora da curva; "
+            f"sem {'eles' if plural else 'ele'}, a média do período cai de {fmt_days(avg_bd)} "
+            f"para cerca de {fmt_days(avg_wo)} dias úteis."
+        )
+    else:
+        note = "Cartões ordenados do menor para o maior lead time. A linha vertical marca a mediana."
+    return {
+        "completed": completed,
+        "stats": {
+            "count": n, "median_bd": median_bd, "median_bd_display": fmt_days(median_bd),
+            "median_cd": median_cd, "avg_bd": avg_bd, "avg_bd_display": fmt_days(avg_bd),
+            "bd_min": bd_min, "bd_max": bd_max,
+            "fence_bd": fence_bd if fence_bd != float("inf") else 999999,
+            "fence_cd": fence_cd if fence_cd != float("inf") else 999999,
+        },
+        "note": note,
+    }
+
+
+def build_approval_all(board, actions):
     name_to_id = board["lists"]
     id_to_name = {v: k for k, v in name_to_id.items()}
     REVISAO_IDS = {name_to_id[n] for n in REVISAO_NAMES}
@@ -179,23 +300,22 @@ def detect_approval_cycles(board, actions, period_start, today):
     APPROVAL_IDS = REVISAO_IDS | CLIENTE_IDS
     EXIT_IDS = {name_to_id[n] for n in EXIT_NAMES}
 
-    by_card = {}
+    by_card = defaultdict(list)
     for a in actions:
         d = a.get("data", {})
+        if a.get("type") != "updateCard":
+            continue
         before, after, card = d.get("listBefore"), d.get("listAfter"), d.get("card")
         if not before or not after or not card or card["id"] in EXCLUDE_CARD_IDS:
             continue
-        by_card.setdefault(card["id"], []).append({
-            "t": to_brt(a["date"]), "before": before["id"], "after": after["id"], "name": card.get("name", "")
-        })
+        by_card[card["id"]].append({"t": to_brt(a["date"]), "before": before["id"], "after": after["id"], "name": card.get("name", "")})
 
-    completed, waiting = [], []
+    completed_all, waiting = [], []
     for cid, moves in by_card.items():
         moves.sort(key=lambda m: m["t"])
         in_block_since = None
         pend_start = pend_list = None
         segments = []
-        last_cycle = None
         card_name = moves[-1]["name"]
         for m in moves:
             b, a, t = m["before"], m["after"], m["t"]
@@ -209,38 +329,33 @@ def detect_approval_cycles(board, actions, period_start, today):
             elif b in APPROVAL_IDS and a in EXIT_IDS:
                 if in_block_since is not None:
                     segments.append((pend_start, t, pend_list))
-                    last_cycle = {"name": card_name, "start": in_block_since, "end": t,
-                                  "segments": list(segments), "exit_id": a}
+                    rev_bd = cli_bd = rev_cd = cli_cd = 0
+                    for ss, se, sl in segments:
+                        sd, ed = ss.date(), se.date()
+                        bd, cd = business_days_between(sd, ed), (ed - sd).days
+                        if sl in REVISAO_IDS:
+                            rev_bd += bd; rev_cd += cd
+                        else:
+                            cli_bd += bd; cli_cd += cd
+                    sd, ed = in_block_since.date(), t.date()
+                    completed_all.append({
+                        "name": card_name, "started": sd.isoformat(), "finished": ed.isoformat(),
+                        "exit_stage": id_to_name.get(a, "?"),
+                        "rev_bd": rev_bd, "cli_bd": cli_bd, "total_bd": business_days_between(sd, ed),
+                        "rev_cd": rev_cd, "cli_cd": cli_cd, "total_cd": (ed - sd).days,
+                    })
                 in_block_since, segments = None, []
             elif b in APPROVAL_IDS and a not in APPROVAL_IDS and a not in EXIT_IDS:
                 in_block_since, segments = None, []
-
-        if last_cycle and period_start <= last_cycle["end"].date() <= today:
-            c = last_cycle
-            rev_bd = cli_bd = rev_cd = cli_cd = 0
-            for seg_start, seg_end, seg_list in c["segments"]:
-                sd, ed = seg_start.date(), seg_end.date()
-                bd, cd = business_days_between(sd, ed), (ed - sd).days
-                if seg_list in REVISAO_IDS:
-                    rev_bd += bd; rev_cd += cd
-                else:
-                    cli_bd += bd; cli_cd += cd
-            sd, ed = c["start"].date(), c["end"].date()
-            completed.append({
-                "name": c["name"], "started": sd.isoformat(), "finished": ed.isoformat(),
-                "exit_stage": id_to_name.get(c["exit_id"], "?"),
-                "rev_bd": rev_bd, "cli_bd": cli_bd, "total_bd": business_days_between(sd, ed),
-                "rev_cd": rev_cd, "cli_cd": cli_cd, "total_cd": (ed - sd).days,
-            })
-
         if in_block_since is not None:
             segs_open = list(segments) + [(pend_start, None, pend_list)]
             rev_bd = cli_bd = rev_cd = cli_cd = 0
-            for seg_start, seg_end, seg_list in segs_open:
-                sd = seg_start.date()
-                ed = seg_end.date() if seg_end else today
+            today = date.today()
+            for ss, se, sl in segs_open:
+                sd = ss.date()
+                ed = se.date() if se else today
                 bd, cd = business_days_between(sd, ed), (ed - sd).days
-                if seg_list in REVISAO_IDS:
+                if sl in REVISAO_IDS:
                     rev_bd += bd; rev_cd += cd
                 else:
                     cli_bd += bd; cli_cd += cd
@@ -250,138 +365,145 @@ def detect_approval_cycles(board, actions, period_start, today):
                 "rev_bd": rev_bd, "cli_bd": cli_bd, "total_bd": business_days_between(sd, today),
                 "rev_cd": rev_cd, "cli_cd": cli_cd, "total_cd": (today - sd).days,
             })
-
-    completed.sort(key=lambda c: c["finished"])
     waiting.sort(key=lambda c: -c["total_bd"])
+    return completed_all, waiting
 
+
+def approval_stats_for_period(completed_all, period_start, period_end):
+    completed = [c for c in completed_all if period_start <= date.fromisoformat(c["finished"]) <= period_end]
+    completed.sort(key=lambda c: c["finished"])
     bd_vals = sorted(c["total_bd"] for c in completed)
     rev_vals = sorted(c["rev_bd"] for c in completed)
     cli_vals = sorted(c["cli_bd"] for c in completed)
     n = len(completed)
     fence_bd = iqr_upper_fence(bd_vals)
-
     return {
         "completed": completed,
-        "waiting": waiting,
         "stats": {
             "count": n,
             "median_total_bd": median(bd_vals), "median_total_bd_display": fmt_days(median(bd_vals)),
             "median_rev_bd": median(rev_vals), "median_rev_bd_display": fmt_days(median(rev_vals)),
             "median_cli_bd": median(cli_vals), "median_cli_bd_display": fmt_days(median(cli_vals)),
             "fence_bd": fence_bd if fence_bd != float("inf") else 999999,
-            "waiting_count": len(waiting),
         },
     }
 
 
+def build_card_reached_dates(board, actions, current_cards):
+    name_to_id = board["lists"]
+    macro_of_list = {}
+    for macro, names_ in MACRO_STAGE_NAMES.items():
+        for n in names_:
+            macro_of_list[name_to_id[n]] = macro
+    cancelado_id = name_to_id["Cancelado"]
+
+    current_list_by_card = {c["id"]: c["idList"] for c in current_cards}
+    eligible_ids = {cid for cid, lid in current_list_by_card.items() if lid != cancelado_id and cid not in EXCLUDE_CARD_IDS}
+
+    creates = defaultdict(list)
+    moves = defaultdict(list)
+    card_names = {}
+    for a in actions:
+        d = a.get("data", {})
+        card = d.get("card")
+        if not card or card["id"] in EXCLUDE_CARD_IDS:
+            continue
+        cid = card["id"]
+        card_names[cid] = card.get("name", card_names.get(cid, ""))
+        if a.get("type") == "createCard" and d.get("list"):
+            creates[cid].append((to_brt(a["date"]), d["list"]["id"]))
+        elif a.get("type") == "updateCard" and d.get("listAfter"):
+            moves[cid].append((to_brt(a["date"]), d["listAfter"]["id"]))
+
+    reached = {}
+    for cid in eligible_ids:
+        timeline = []
+        if creates.get(cid):
+            t0, l0 = min(creates[cid], key=lambda x: x[0])
+            timeline.append((t0, l0))
+        mv = sorted(moves.get(cid, []), key=lambda x: x[0])
+        timeline.extend(mv)
+        if not timeline:
+            timeline = [(created_date_brt(cid), current_list_by_card[cid])]
+        elif not creates.get(cid):
+            t0 = created_date_brt(cid)
+            l0 = mv[0][1] if mv else current_list_by_card[cid]
+            timeline.insert(0, (t0, l0))
+
+        direct = {}
+        for t, lid in timeline:
+            macro = macro_of_list.get(lid)
+            if macro and macro not in direct:
+                direct[macro] = t
+
+        r = {}
+        carry = None
+        for macro in reversed(MACRO_ORDER):
+            cand = direct.get(macro)
+            if cand is not None and (carry is None or cand < carry):
+                carry = cand
+            if carry is not None:
+                r[macro] = carry
+        reached[cid] = {"name": card_names.get(cid, ""), "reached": r}
+    return reached
+
+
+def build_cfd_series(reached, period_start, period_end):
+    sorted_dates = {}
+    for macro in MACRO_ORDER:
+        ds = sorted(v["reached"][macro].date() for v in reached.values() if macro in v["reached"])
+        sorted_dates[macro] = ds
+    n_days = (period_end - period_start).days + 1
+    dates = [(period_start + timedelta(days=i)).isoformat() for i in range(n_days)]
+    series = {}
+    for macro in MACRO_ORDER:
+        ds = sorted_dates[macro]
+        series[macro] = [bisect.bisect_right(ds, period_start + timedelta(days=i)) for i in range(n_days)]
+    return {"dates": dates, "series": series}
+
+
 def build_dataset(board):
     today = date.today()
-    period_start = date(today.year, 1, 1)
-    since_iso = f"{period_start.isoformat()}T00:00:00.000Z"
-    before_iso = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
     board_id = board["board_id"]
     name_to_id = board["lists"]
 
-    TODO_LISTS = {name_to_id[n] for n, g in STAGE_GROUPS.items() if g == "todo"}
-    WIP_LISTS = {name_to_id[n] for n, g in STAGE_GROUPS.items() if g == "wip"}
-    DONE_LISTS = {name_to_id[n] for n, g in STAGE_GROUPS.items() if g == "done"}
-
     cards = trello_get(f"/boards/{board_id}/cards", filter="open", fields="id,name,idList,closed")
-    actions = trello_get(f"/boards/{board_id}/actions", filter="updateCard:idList",
-                          since=since_iso, before=before_iso, limit=1000, fields="data,date")
+    actions = trello_get_all_actions(board_id)
 
-    by_card = {}
-    for a in actions:
-        cid = a["data"]["card"]["id"]
-        if cid in EXCLUDE_CARD_IDS:
-            continue
-        dt = to_brt(a["date"])
-        list_after = a["data"].get("listAfter")
-        if not list_after:
-            continue
-        if cid not in by_card or dt > by_card[cid]["dt"]:
-            by_card[cid] = {"dt": dt, "name": a["data"]["card"]["name"], "listAfter_id": list_after["id"]}
-
-    completed = []
-    for cid, info in by_card.items():
-        if info["listAfter_id"] in DONE_LISTS:
-            created = created_date_brt(cid)
-            comp_dt = info["dt"]
-            completed.append({
-                "id": cid, "name": info["name"],
-                "created": created.date().isoformat(),
-                "completed": comp_dt.date().isoformat(),
-                "calendar_days": (comp_dt.date() - created.date()).days,
-                "business_days": business_days_between(created.date(), comp_dt.date()),
-            })
-    completed.sort(key=lambda c: c["completed"])
-
-    afazer = []
-    for c in cards:
-        if c["id"] in EXCLUDE_CARD_IDS:
-            continue
-        if c["idList"] in TODO_LISTS:
-            created = created_date_brt(c["id"]).date()
-            afazer.append({
-                "id": c["id"], "name": c["name"], "created": created.isoformat(),
-                "business_days_waiting": business_days_between(created, today),
-                "calendar_days_waiting": (today - created).days,
-            })
-    afazer.sort(key=lambda c: -c["business_days_waiting"])
+    TODO_LISTS = {name_to_id["Backlog"], name_to_id["Criação de Briefing"], name_to_id["Aguardando Material"]}
+    WIP_NAMES = ["Liberado Produção", "Andamento Texto", "Andamento Ritta", "Andamento Castro",
+                 "Revisão Interna", "Ajuste Interno", "Aprovação Cliente", "Ajuste Cliente", "Agendado"]
+    WIP_LISTS = {name_to_id[n] for n in WIP_NAMES}
+    DONE_LISTS = {name_to_id["Aprovado/Publicação"], name_to_id["Finalizado"]}
 
     wip_count = sum(1 for c in cards if c["idList"] in WIP_LISTS)
     done_total = sum(1 for c in cards if c["idList"] in DONE_LISTS)
 
-    bd_vals = sorted(c["business_days"] for c in completed)
-    cd_vals = sorted(c["calendar_days"] for c in completed)
-    n = len(completed)
+    lt_completed_all, afazer = build_lead_time_all(board, actions, cards)
+    ap_completed_all, ap_waiting = build_approval_all(board, actions)
+    reached = build_card_reached_dates(board, actions, cards)
 
-    median_bd = median(bd_vals)
-    median_cd = median(cd_vals)
-    avg_bd = round(sum(bd_vals) / n, 1) if n else 0
-    bd_min, bd_max = (min(bd_vals), max(bd_vals)) if n else (0, 0)
-
-    fence_bd = iqr_upper_fence(bd_vals)
-    fence_cd = iqr_upper_fence(cd_vals)
-    outliers = [c for c in completed if c["business_days"] > fence_bd]
-    rest = [c for c in completed if c not in outliers]
-    avg_wo_outliers = round(sum(c["business_days"] for c in rest) / len(rest), 1) if rest else avg_bd
-
-    if outliers:
-        plural = len(outliers) > 1
-        note = (
-            f"Cartões ordenados do menor para o maior lead time. A linha vertical marca a mediana. "
-            f"{len(outliers)} {'cartões' if plural else 'cartão'} "
-            f"{'destacados' if plural else 'destacado'} em vermelho "
-            f"{'estão' if plural else 'está'} fora da curva; "
-            f"sem {'eles' if plural else 'ele'}, a média do período cai de {fmt_days(avg_bd)} "
-            f"para cerca de {fmt_days(avg_wo_outliers)} dias úteis."
-        )
-    else:
-        note = "Cartões ordenados do menor para o maior lead time. A linha vertical marca a mediana."
-
-    all_actions = trello_get_all_actions(board_id)
-    approval = detect_approval_cycles(board, all_actions, period_start, today)
+    periods = {}
+    for key, label, n_months in PERIOD_DEFS:
+        period_start = months_ago(today, n_months)
+        lt = lead_time_stats_for_period(lt_completed_all, period_start, today)
+        ap = approval_stats_for_period(ap_completed_all, period_start, today)
+        cfd = build_cfd_series(reached, period_start, today)
+        periods[key] = {
+            "label": label,
+            "period_start": period_start.isoformat(), "period_end": today.isoformat(),
+            "lead_time": lt, "approval": ap, "cfd": cfd,
+        }
 
     return {
         "name": board["name"],
-        "period_start": period_start.isoformat(),
-        "period_end": today.isoformat(),
-        "completed": completed,
-        "afazer": afazer,
-        "stats": {
-            "count": n,
-            "median_bd": median_bd, "median_bd_display": fmt_days(median_bd),
-            "median_cd": median_cd,
-            "avg_bd": avg_bd, "avg_bd_display": fmt_days(avg_bd),
-            "bd_min": bd_min, "bd_max": bd_max,
-            "fence_bd": fence_bd if fence_bd != float("inf") else 999999,
-            "fence_cd": fence_cd if fence_cd != float("inf") else 999999,
+        "flow": {
             "todo_count": len(afazer), "wip_count": wip_count, "done_total": done_total,
             "wip_stage_count": len(WIP_LISTS),
         },
-        "note": note,
-        "approval": approval,
+        "afazer": afazer,
+        "approval_waiting": ap_waiting,
+        "periods": periods,
     }
 
 
@@ -392,11 +514,15 @@ def render_html(all_data, board_order, generated_at_str):
     options_html = "".join(
         f'<option value="{k}">{all_data[k]["name"]}</option>' for k in board_order
     )
+    period_options_html = "".join(
+        f'<option value="{key}"{" selected" if key=="12m" else ""}>{label}</option>' for key, label, _ in PERIOD_DEFS
+    )
     repl = {
         "__GENERATED_AT__": generated_at_str,
         "__ALL_BOARDS_JSON__": all_data_json,
         "__BOARD_ORDER_JSON__": board_order_json,
         "__BOARD_OPTIONS_HTML__": options_html,
+        "__PERIOD_OPTIONS_HTML__": period_options_html,
     }
     for k, v in repl.items():
         tpl = tpl.replace(k, v)
@@ -415,7 +541,8 @@ if __name__ == "__main__":
         f.write(html)
 
     for k in board_order:
-        s = all_data[k]["stats"]
-        ap = all_data[k]["approval"]["stats"]
-        print(f"OK [{all_data[k]['name']}]: {s['count']} cartoes concluidos, mediana {s['median_bd_display']} dias uteis | "
-              f"aprovacao: {ap['count']} ciclos, mediana total {ap['median_total_bd_display']} dias uteis")
+        d = all_data[k]
+        p12 = d["periods"]["12m"]
+        print(f"OK [{d['name']}]: lead_time(12m)={p12['lead_time']['stats']['count']} "
+              f"aprovacao(12m)={p12['approval']['stats']['count']} "
+              f"cfd_dias={len(p12['cfd']['dates'])}")

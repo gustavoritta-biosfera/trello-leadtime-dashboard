@@ -112,6 +112,10 @@
       <label for="boardSelector">Board</label>
       <select id="boardSelector">__BOARD_OPTIONS_HTML__</select>
     </div>
+    <div class="board-select-wrap">
+      <label for="periodSelector">Período</label>
+      <select id="periodSelector">__PERIOD_OPTIONS_HTML__</select>
+    </div>
   </div>
   <p class="methodology">Lead time contado em <strong>dias úteis</strong> (segunda a sexta, sem exclusão de feriados), da criação do cartão até a entrada definitiva no grupo <strong>Finalizado</strong>. Detalhes do critério no final da página.</p>
 
@@ -141,6 +145,13 @@
     <div class="stat"><span class="stat-value" id="statAvg">0</span><span class="stat-label">média, dias úteis</span></div>
     <div class="stat"><span class="stat-value" id="statMinmax">0–0</span><span class="stat-label">mínimo–máximo, dias úteis</span></div>
   </div>
+
+  <section>
+    <div class="section-head"><h2>Cumulative Flow Diagram</h2></div>
+    <p class="section-note">Mostra, dia a dia, quantos cartões já alcançaram cada macro etapa do fluxo, de forma acumulada. A distância vertical entre duas faixas em um dia é o WIP daquela etapa naquele momento; a distância horizontal é o tempo aproximado de travessia. Cartões em Cancelado são excluídos. Se um cartão volta para uma etapa anterior, ele continua contando como tendo alcançado a etapa mais avançada, que é a convenção padrão de CFD.</p>
+    <div class="chart" id="cfdChart" style="padding:14px 14px 6px;"></div>
+    <div class="chart-legend" id="cfdLegend"></div>
+  </section>
 
   <section>
     <div class="section-head">
@@ -271,6 +282,15 @@
 const ALL_BOARDS = __ALL_BOARDS_JSON__;
 const BOARD_ORDER = __BOARD_ORDER_JSON__;
 
+const CFD_ORDER = ["Finalizado","Agendado","Aprovação","Produção","Backlog"];
+const CFD_COLORS = {
+  "Finalizado": "#2F6F4E",
+  "Agendado": "#7FAE93",
+  "Aprovação": "#1B4965",
+  "Produção": "#C97D2E",
+  "Backlog": "#D8CFAE",
+};
+
 const MONTHS_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 
 function fmtDate(iso){
@@ -283,12 +303,17 @@ function fmtPeriodDate(iso){
 }
 
 let currentBoardKey = BOARD_ORDER[0];
+let currentPeriod = '12m';
 let currentMetric = 'business_days';
 let currentApMetric = 'bd';
 
+function curPeriod(){
+  return ALL_BOARDS[currentBoardKey].periods[currentPeriod];
+}
+
 function renderChart(){
-  const board = ALL_BOARDS[currentBoardKey];
-  const completed = board.completed;
+  const p = curPeriod();
+  const completed = p.lead_time.completed;
   const chart = document.getElementById('chart');
   chart.innerHTML = '';
   if(completed.length === 0){
@@ -298,8 +323,8 @@ function renderChart(){
   const metric = currentMetric;
   const sorted = [...completed].sort((a,b)=>a[metric]-b[metric]);
   const max = Math.max(...sorted.map(c=>c[metric]));
-  const medianVal = metric === 'business_days' ? board.stats.median_bd : board.stats.median_cd;
-  const fence = metric === 'business_days' ? board.stats.fence_bd : board.stats.fence_cd;
+  const medianVal = metric === 'business_days' ? p.lead_time.stats.median_bd : p.lead_time.stats.median_cd;
+  const fence = metric === 'business_days' ? p.lead_time.stats.fence_bd : p.lead_time.stats.fence_cd;
   sorted.forEach(c=>{
     const row = document.createElement('div');
     row.className = 'bar-row';
@@ -316,10 +341,9 @@ function renderChart(){
   });
 }
 
-
 function renderApprovalChart(){
-  const board = ALL_BOARDS[currentBoardKey];
-  const completed = board.approval.completed;
+  const p = curPeriod();
+  const completed = p.approval.completed;
   const chart = document.getElementById('apChart');
   chart.innerHTML = '';
   if(completed.length === 0){
@@ -329,7 +353,7 @@ function renderApprovalChart(){
   const suf = currentApMetric === 'bd' ? '_bd' : '_cd';
   const sorted = [...completed].sort((a,b)=>a['total'+suf]-b['total'+suf]);
   const max = Math.max(...sorted.map(c=>c['total'+suf]));
-  const fence = board.approval.stats.fence_bd;
+  const fence = p.approval.stats.fence_bd;
   sorted.forEach(c=>{
     const row = document.createElement('div');
     row.className = 'bar-row';
@@ -346,6 +370,61 @@ function renderApprovalChart(){
       <div class="bar-value">${total} d.</div>`;
     chart.appendChild(row);
   });
+}
+
+function fmtDateShort(iso){
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y.slice(2)}`;
+}
+
+function renderCfd(){
+  const p = curPeriod();
+  const cfd = p.cfd;
+  const dates = cfd.dates;
+  const n = dates.length;
+  const el = document.getElementById('cfdChart');
+  const legendEl = document.getElementById('cfdLegend');
+  if(n === 0){
+    el.innerHTML = '<p class="empty">Sem dados para este período.</p>';
+    legendEl.innerHTML = '';
+    return;
+  }
+  const boundaries = [new Array(n).fill(0)];
+  for(const macro of CFD_ORDER){
+    boundaries.push(cfd.series[macro]);
+  }
+  const maxVal = Math.max(...boundaries[boundaries.length-1], 1);
+  const W = 900, H = 280, padL = 36, padB = 24, padT = 10, padR = 10;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const xAt = i => padL + (n<=1?0:(i/(n-1))*plotW);
+  const yAt = v => padT + plotH - (maxVal ? (v/maxVal)*plotH : 0);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;font-family:var(--font-mono);">`;
+  for(let t=0;t<=4;t++){
+    const v = Math.round(maxVal*t/4);
+    const y = yAt(v);
+    svg += `<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="var(--line)" stroke-width="1"/>`;
+    svg += `<text x="${padL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="var(--muted)">${v}</text>`;
+  }
+  for(let k=0;k<CFD_ORDER.length;k++){
+    const macro = CFD_ORDER[k];
+    const lower = boundaries[k], upper = boundaries[k+1];
+    let path = `M ${xAt(0)},${yAt(lower[0])} `;
+    for(let i=0;i<n;i++) path += `L ${xAt(i)},${yAt(upper[i])} `;
+    for(let i=n-1;i>=0;i--) path += `L ${xAt(i)},${yAt(lower[i])} `;
+    path += 'Z';
+    svg += `<path d="${path}" fill="${CFD_COLORS[macro]}" opacity="0.92"/>`;
+  }
+  const tickIdx = n<=1 ? [0] : (n<=2 ? [0,n-1] : [0, Math.floor((n-1)/2), n-1]);
+  tickIdx.forEach(i=>{
+    svg += `<text x="${xAt(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--muted)">${fmtDateShort(dates[i])}</text>`;
+  });
+  svg += `</svg>`;
+  el.innerHTML = svg;
+
+  legendEl.innerHTML = CFD_ORDER.slice().reverse().map(m=>
+    `<span><span class="dot" style="background:${CFD_COLORS[m]}"></span>${m}</span>`
+  ).join('');
 }
 
 document.getElementById('metricToggle').addEventListener('click', e=>{
@@ -380,7 +459,7 @@ function makeSortable(tableId, getData, rowFn, emptyMsg){
         return asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
       });
     }
-    tbody.innerHTML = rows.length ? rows.map(rowFn).join('') : `<tr><td colspan="6" class="empty">${emptyMsg}</td></tr>`;
+    tbody.innerHTML = rows.length ? rows.map(rowFn).join('') : `<tr><td colspan="8" class="empty">${emptyMsg}</td></tr>`;
     table.querySelectorAll('th .arrow').forEach(a=>a.remove());
     if(sortKey){
       const th = table.querySelector(`th[data-key="${sortKey}"]`);
@@ -404,7 +483,7 @@ function makeSortable(tableId, getData, rowFn, emptyMsg){
   return draw;
 }
 
-const redrawCompleted = makeSortable('completedTable', ()=>ALL_BOARDS[currentBoardKey].completed, c=>`
+const redrawCompleted = makeSortable('completedTable', ()=>curPeriod().lead_time.completed, c=>`
   <tr>
     <td class="name">${c.name}</td>
     <td>${fmtDate(c.created)}</td>
@@ -421,7 +500,7 @@ const redrawAfazer = makeSortable('afazerTable', ()=>ALL_BOARDS[currentBoardKey]
     <td class="num">${c.calendar_days_waiting}</td>
   </tr>`, 'Nada parado em A Fazer agora.');
 
-const redrawApCompleted = makeSortable('apCompletedTable', ()=>ALL_BOARDS[currentBoardKey].approval.completed, c=>`
+const redrawApCompleted = makeSortable('apCompletedTable', ()=>curPeriod().approval.completed, c=>`
   <tr>
     <td class="name">${c.name}</td>
     <td>${fmtDate(c.started)}</td>
@@ -433,7 +512,7 @@ const redrawApCompleted = makeSortable('apCompletedTable', ()=>ALL_BOARDS[curren
     <td class="num">${c.total_cd}</td>
   </tr>`, 'Nenhum ciclo de aprovação concluído no período ainda.');
 
-const redrawApWaiting = makeSortable('apWaitingTable', ()=>ALL_BOARDS[currentBoardKey].approval.waiting, c=>`
+const redrawApWaiting = makeSortable('apWaitingTable', ()=>ALL_BOARDS[currentBoardKey].approval_waiting, c=>`
   <tr>
     <td class="name">${c.name}</td>
     <td>${fmtDate(c.since)}</td>
@@ -442,34 +521,35 @@ const redrawApWaiting = makeSortable('apWaitingTable', ()=>ALL_BOARDS[currentBoa
     <td class="num">${c.total_bd}</td>
   </tr>`, 'Nada parado em Aprovação agora.');
 
-function renderBoard(key){
-  currentBoardKey = key;
-  const board = ALL_BOARDS[key];
-  const s = board.stats;
+function refreshAll(){
+  const board = ALL_BOARDS[currentBoardKey];
+  const p = curPeriod();
+  const s = p.lead_time.stats;
 
   document.title = `Lead Time — ${board.name}`;
   document.getElementById('subtitleText').textContent =
-    `Board ${board.name} · ${fmtPeriodDate(board.period_start)} – ${fmtPeriodDate(board.period_end)}`;
+    `Board ${board.name} · ${fmtPeriodDate(p.period_start)} – ${fmtPeriodDate(p.period_end)}`;
 
-  document.getElementById('flowTodoCount').textContent = s.todo_count;
-  document.getElementById('flowWipCount').textContent = s.wip_count;
-  document.getElementById('flowWipSub').textContent = `${s.wip_stage_count} colunas`;
+  document.getElementById('flowTodoCount').textContent = board.flow.todo_count;
+  document.getElementById('flowWipCount').textContent = board.flow.wip_count;
+  document.getElementById('flowWipSub').textContent = `${board.flow.wip_stage_count} colunas`;
   document.getElementById('flowDoneCount').textContent = s.count;
-  document.getElementById('flowDoneSub').textContent = `no período · ${s.done_total} no total`;
+  document.getElementById('flowDoneSub').textContent = `no período · ${board.flow.done_total} no total`;
 
   document.getElementById('statCount').textContent = s.count;
   document.getElementById('statMedian').textContent = s.median_bd_display;
   document.getElementById('statAvg').textContent = s.avg_bd_display;
   document.getElementById('statMinmax').textContent = `${s.bd_min}–${s.bd_max}`;
 
-  document.getElementById('sectionNote').textContent = board.note;
+  document.getElementById('sectionNote').textContent = p.lead_time.note;
 
-  const ap = board.approval.stats;
+  const ap = p.approval.stats;
   document.getElementById('apStatCount').textContent = ap.count;
   document.getElementById('apStatTotal').textContent = ap.median_total_bd_display;
   document.getElementById('apStatRev').textContent = ap.median_rev_bd_display;
   document.getElementById('apStatCli').textContent = ap.median_cli_bd_display;
 
+  renderCfd();
   renderChart();
   redrawCompleted();
   redrawAfazer();
@@ -479,10 +559,16 @@ function renderBoard(key){
 }
 
 document.getElementById('boardSelector').addEventListener('change', e=>{
-  renderBoard(e.target.value);
+  currentBoardKey = e.target.value;
+  refreshAll();
 });
 
-renderBoard(currentBoardKey);
+document.getElementById('periodSelector').addEventListener('change', e=>{
+  currentPeriod = e.target.value;
+  refreshAll();
+});
+
+refreshAll();
 </script>
 </body>
 </html>
