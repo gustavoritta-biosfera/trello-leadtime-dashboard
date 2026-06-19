@@ -203,8 +203,8 @@ def extract_list(d, key):
 
 def build_lead_time_all(board, actions, current_cards):
     name_to_id = board["lists"]
-    DONE_LISTS = {name_to_id["Aprovado/Publicação"], name_to_id["Finalizado"]}
-    TODO_LISTS = {name_to_id["Backlog"], name_to_id["Criação de Briefing"], name_to_id["Aguardando Material"]}
+    DONE_LISTS = {name_to_id["Aprovado/Publicação"], name_to_id["Agendado"], name_to_id["Finalizado"]}
+    TODO_LISTS = {name_to_id["Backlog"], name_to_id["Criação de Briefing"], name_to_id["Aguardando Material"], name_to_id["Liberado Produção"]}
 
     creates_first = {}
     by_card = {}
@@ -478,11 +478,11 @@ def build_dataset(board):
     cards = trello_get(f"/boards/{board_id}/cards", filter="open", fields="id,name,idList,closed")
     actions = trello_get_all_actions(board_id)
 
-    TODO_LISTS = {name_to_id["Backlog"], name_to_id["Criação de Briefing"], name_to_id["Aguardando Material"]}
-    WIP_NAMES = ["Liberado Produção", "Andamento Texto", "Andamento Ritta", "Andamento Castro",
-                 "Revisão Interna", "Ajuste Interno", "Aprovação Cliente", "Ajuste Cliente", "Agendado"]
+    TODO_LISTS = {name_to_id["Backlog"], name_to_id["Criação de Briefing"], name_to_id["Aguardando Material"], name_to_id["Liberado Produção"]}
+    WIP_NAMES = ["Andamento Texto", "Andamento Ritta", "Andamento Castro",
+                 "Revisão Interna", "Ajuste Interno", "Aprovação Cliente", "Ajuste Cliente"]
     WIP_LISTS = {name_to_id[n] for n in WIP_NAMES}
-    DONE_LISTS = {name_to_id["Aprovado/Publicação"], name_to_id["Finalizado"]}
+    DONE_LISTS = {name_to_id["Aprovado/Publicação"], name_to_id["Agendado"], name_to_id["Finalizado"]}
 
     wip_count = sum(1 for c in cards if c["idList"] in WIP_LISTS)
     done_total = sum(1 for c in cards if c["idList"] in DONE_LISTS)
