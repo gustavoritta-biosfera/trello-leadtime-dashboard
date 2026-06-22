@@ -3,6 +3,7 @@ name: Atualizar dashboard
 on:
   schedule:
     - cron: '0 11 * * 1'
+    - cron: '0 19 * * 5'
   workflow_dispatch: {}
 
 permissions:
