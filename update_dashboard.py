@@ -73,6 +73,16 @@ BOARDS = [
         "Ajuste Cliente": "695cffb3ed8f9099f69a2d09", "Aprovado/Publicação": "6839f0d0aeb2f77b4a903b38",
         "Agendado": "698c84ab095360c1b0c30e1e", "Finalizado": "6839f0e360006db401074d77",
         "Cancelado": "6839f0e8533dc3eb256537ce"}},
+
+    {"key": "smarty", "name": "Smarty", "board_id": "6a39972b6afe4853707ad1ba", "lists": {
+        "Backlog": "6a39972b6afe4853707ad1ab", "Criação de Briefing": "6a39972b6afe4853707ad1ac",
+        "Aguardando Material": "6a39972b6afe4853707ad1ad", "Liberado Produção": "6a39972b6afe4853707ad1b9",
+        "Andamento Texto": "6a39972b6afe4853707ad1ae", "Andamento Ritta": "6a39972b6afe4853707ad1b5",
+        "Andamento Castro": "6a39972b6afe4853707ad1b6", "Revisão Interna": "6a39972b6afe4853707ad1af",
+        "Ajuste Interno": "6a39972b6afe4853707ad1b4", "Aprovação Cliente": "6a39972b6afe4853707ad1b0",
+        "Ajuste Cliente": "6a39972b6afe4853707ad1b7", "Aprovado/Publicação": "6a39972b6afe4853707ad1b1",
+        "Agendado": "6a39972b6afe4853707ad1b8", "Finalizado": "6a39972b6afe4853707ad1b2",
+        "Cancelado": "6a39972b6afe4853707ad1b3"}},
 ]
 
 REVISAO_NAMES = {"Revisão Interna", "Ajuste Interno"}
